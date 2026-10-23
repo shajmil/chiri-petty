@@ -42,7 +42,6 @@ type Dialog =
   | "packs"
   | "settings"
   | "setup"
-  | "practice"
   | "mic-check"
   | null;
 
@@ -54,6 +53,8 @@ export default function Party() {
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState(0);
   const [joinCode, setJoinCode] = useState("");
+  // Opened from an invitation link: joining comes first and the join button leads.
+  const [isInvited, setIsInvited] = useState(false);
   const [mode, setMode] = useState<"online" | "tabs">("online");
   const [dialog, setDialog] = useState<Dialog>(null);
   const [busy, setBusy] = useState(false);
@@ -65,10 +66,6 @@ export default function Party() {
   const [micCheckPassed, setMicCheckPassed] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
-  const [practiceId, setPracticeId] = useState(PROMPTS[0].id);
-  const [practiceResult, setPracticeResult] = useState("");
-  const [practiceBlob, setPracticeBlob] = useState<Blob | null>(null);
-  const [practiceRecording, setPracticeRecording] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
   const [selectedPack, setSelectedPack] = useState<Category>("mixed");
 
@@ -76,6 +73,7 @@ export default function Party() {
     setName(localStorage.getItem("chiri-name") ?? "");
     const params = new URLSearchParams(location.search);
     setJoinCode(params.get("room")?.toUpperCase() ?? "");
+    setIsInvited(Boolean(params.get("room")));
     if (params.get("mode") === "tabs") setMode("tabs");
     setReducedMotion(matchMedia("(prefers-reduced-motion: reduce)").matches);
     return () => {
@@ -259,6 +257,7 @@ export default function Party() {
     }
     // Everyone passes one sample test before their first ready-up in this visit.
     if (!micCheckPassed) {
+      void audio.unlock();
       setDialog("mic-check");
       return;
     }
@@ -294,28 +293,6 @@ export default function Party() {
     }
   }
 
-  async function practice() {
-    if (!(await enableMic())) return;
-    setPracticeRecording(true);
-    const practicePrompt = findPrompt(practiceId);
-    const seconds = recordingWindowSeconds(practicePrompt.duration);
-    setPracticeResult(`Recording for ${seconds} seconds…`);
-    setPracticeBlob(null);
-    try {
-      const attempt = await audio.record(seconds, practicePrompt);
-      setPracticeBlob(attempt.blob);
-      setPracticeResult(
-        `${attempt.score.overall === null ? "No score" : `${attempt.score.overall}/100`} · ${attempt.score.reason}`,
-      );
-    } catch (failure) {
-      setPracticeResult(
-        failure instanceof Error ? failure.message : "Recording failed.",
-      );
-    } finally {
-      setPracticeRecording(false);
-    }
-  }
-
   function changeSettings(
     category: Category,
     rounds = room?.settings.rounds ?? DEFAULT_ROUNDS,
@@ -325,7 +302,6 @@ export default function Party() {
   }
 
   function closeDialog() {
-    if (practiceRecording) return;
     audio.stopPlayback();
     if (dialog === "mic-check") audio.cancelRecording();
     setDialog(null);
@@ -365,7 +341,11 @@ export default function Party() {
         </button>
       </header>
 
-      <main className={isInMatch ? "match-view" : undefined}>
+      <main
+        className={
+          isInMatch ? "match-view" : !room && isInvited ? "invited" : undefined
+        }
+      >
         {!room ? (
           <>
             <section className="home-stage" aria-labelledby="home-title">
@@ -391,15 +371,6 @@ export default function Party() {
                   <span>One take each</span>
                   <span>Any modern browser</span>
                 </div>
-                <button
-                  className="text-action"
-                  onClick={() => {
-                    setDialog("practice");
-                    setPracticeResult("");
-                  }}
-                >
-                  Try the microphone first <span>↗</span>
-                </button>
               </div>
               <div className="scene-wrap">
                 <StageView
@@ -416,8 +387,16 @@ export default function Party() {
 
             <section className="room-entry" aria-labelledby="entry-title">
               <div className="entry-heading">
-                <h2 id="entry-title">Get the gang together.</h2>
-                <p>No downloads. No awkward icebreakers.</p>
+                <h2 id="entry-title">
+                  {isInvited
+                    ? `You’re invited to room ${joinCode}`
+                    : "Get the gang together."}
+                </h2>
+                <p>
+                  {isInvited
+                    ? "Pick a name and a face, then join the party."
+                    : "No downloads. No awkward icebreakers."}
+                </p>
               </div>
               <div className="entry-form">
                 <div className="identity-fields">
@@ -447,7 +426,7 @@ export default function Party() {
                 </div>
                 <div className="room-actions">
                   <button
-                    className="primary"
+                    className={isInvited ? "secondary" : "primary"}
                     disabled={busy}
                     onClick={() => void connect(false)}
                   >
@@ -471,7 +450,7 @@ export default function Party() {
                       autoCapitalize="characters"
                     />
                     <button
-                      className="secondary"
+                      className={isInvited ? "primary" : "secondary"}
                       disabled={busy}
                       onClick={() => void connect(true)}
                     >
@@ -1001,10 +980,8 @@ export default function Party() {
                 : dialog === "setup"
                   ? "Connect your online party."
                   : dialog === "mic-check"
-                    ? "Quick mic check."
-                    : dialog === "practice"
-                      ? "A little mic check."
-                      : "Make yourself heard."
+                    ? "Mic check"
+                    : "Make yourself heard."
           }
           close={closeDialog}
         >
@@ -1055,8 +1032,8 @@ export default function Party() {
                 heard by members of that room. Rooms expire after 24 hours; the
                 project owner must enable the documented cleanup job to
                 physically delete clips. Tab-test clips stay in this browser’s
-                IndexedDB until cleared. Practice recordings stay in memory and
-                are released when you close the page.
+                IndexedDB until cleared. The mic check records nothing; it only
+                measures how loud your voice is.
               </p>
               <button
                 className="secondary"
@@ -1171,7 +1148,7 @@ export default function Party() {
               </p>
             </div>
           )}
-          {(dialog === "practice" || dialog === "settings") && (
+          {dialog === "settings" && (
             <div className="audio-settings">
               <div className="mic-test">
                 <div className="mic-test-icon">
@@ -1200,10 +1177,7 @@ export default function Party() {
                   Microphone
                   <select
                     value={deviceId}
-                    disabled={
-                      Boolean(room && room.phase !== "LOBBY") ||
-                      practiceRecording
-                    }
+                    disabled={Boolean(room && room.phase !== "LOBBY")}
                     onChange={(event) => {
                       setDeviceId(event.target.value);
                       void audio
@@ -1243,68 +1217,6 @@ export default function Party() {
                   onChange={(event) => setReducedMotion(event.target.checked)}
                 />
               </label>
-              {dialog === "practice" && (
-                <>
-                  <label>
-                    Choose a practice sound
-                    <select
-                      value={practiceId}
-                      disabled={practiceRecording}
-                      onChange={(event) => {
-                        setPracticeId(event.target.value);
-                        setPracticeResult("");
-                        setPracticeBlob(null);
-                      }}
-                    >
-                      {PROMPTS.map((sound) => (
-                        <option key={sound.id} value={sound.id}>
-                          {sound.title}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <p>{findPrompt(practiceId).instruction}</p>
-                  <div className="practice-actions">
-                    <button
-                      className="secondary"
-                      disabled={practiceRecording}
-                      onClick={() =>
-                        void audio
-                          .playReference(findPrompt(practiceId))
-                          .catch((failure) => setError(failure.message))
-                      }
-                    >
-                      Listen to reference ▷
-                    </button>
-                    <button
-                      className="primary"
-                      disabled={practiceRecording}
-                      onClick={() => void practice()}
-                    >
-                      {practiceRecording
-                        ? "Recording…"
-                        : "Record one take"}
-                    </button>
-                  </div>
-                  {practiceResult && (
-                    <p role="status" className="practice-result">
-                      {practiceResult}
-                    </p>
-                  )}
-                  {practiceBlob && (
-                    <button
-                      className="secondary"
-                      onClick={() =>
-                        void audio
-                          .playBlob(practiceBlob)
-                          .catch((failure) => setError(failure.message))
-                      }
-                    >
-                      Hear my take ▷
-                    </button>
-                  )}
-                </>
-              )}
             </div>
           )}
           {showError && (

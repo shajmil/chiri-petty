@@ -17,8 +17,7 @@ async function createTabRoom(page: Page, name: string) {
 // Ready-up requires passing one sample mic test first.
 async function readyUp(page: Page) {
   await page.getByRole("button", { name: "Mic check & ready up" }).click();
-  await page.getByRole("button", { name: "Start the mic test" }).click();
-  await expect(page.locator(".mic-check-pass")).toBeVisible({ timeout: 20000 });
+  await expect(page.locator(".mic-orb.passed")).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Done" }).click();
   await expect(
     page.getByRole("button", { name: "Ready · Change my mind" }),
@@ -146,7 +145,7 @@ test("invalid room, denied microphone and honest online configuration state", as
       throw new DOMException("Denied", "NotAllowedError");
     };
   });
-  await page.getByRole("button", { name: "Try the microphone first" }).click();
+  await page.getByRole("button", { name: "Audio and display settings" }).click();
   await page.getByRole("button", { name: "Enable microphone" }).click();
   await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
     "denied",
@@ -320,7 +319,7 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
   expect(errors).toEqual([]);
 });
 
-test("ready-up requires passing the sample mic test; a silent mic fails", async ({
+test("ready-up requires passing the mic check; a silent mic fails", async ({
   page,
   context,
 }) => {
@@ -328,19 +327,26 @@ test("ready-up requires passing the sample mic test; a silent mic fails", async 
   const friend = await context.newPage();
   await joinTabRoom(friend, code, "Manu");
   await readyUp(friend);
-  await page.getByRole("button", { name: "Mic check & ready up" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Quick mic check");
-  await page.getByRole("button", { name: "Close dialog" }).click();
-  await expect(page.getByRole("button", { name: "Mic check & ready up" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start the chaos" })).toBeDisabled();
   await page.evaluate(() => {
     navigator.mediaDevices.getUserMedia = async () =>
       new AudioContext().createMediaStreamDestination().stream;
   });
   await page.getByRole("button", { name: "Mic check & ready up" }).click();
-  await page.getByRole("button", { name: "Start the mic test" }).click();
-  await expect(page.locator(".mic-check-fail")).toBeVisible({ timeout: 20000 });
+  await expect(page.getByRole("dialog")).toContainText("Mic check");
+  await expect(page.locator(".mic-orb.failed")).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.getByRole("button", { name: "Start the chaos" })).toBeDisabled();
+});
+
+test("an invitation link puts joining first, with no scrolling on a phone", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openParty(page, "/?mode=tabs&room=ABCDEFGH");
+  await expect(page.locator("#entry-title")).toContainText("invited to room ABCDEFGH");
+  const join = page.getByRole("button", { name: "Join party", exact: true });
+  await expect(join).toHaveClass(/primary/);
+  await expect(page.getByLabel("8-character room code")).toHaveValue("ABCDEFGH");
+  const box = await join.boundingBox();
+  expect(box && box.y + box.height <= 844).toBe(true);
+  await expect(page.getByRole("button", { name: /Try the microphone first/ })).toHaveCount(0);
 });

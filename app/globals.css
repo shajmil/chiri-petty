@@ -226,10 +226,6 @@ footer {
   gap: 16px;
   text-align: left;
 }
-.home-copy > .text-action {
-  margin-top: 22px;
-  font-size: 14px;
-}
 .scene-wrap {
   min-width: 0;
 }
@@ -980,18 +976,6 @@ input[type="checkbox"] {
 .audio-settings > p {
   margin-top: 18px;
 }
-.practice-actions {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 20px;
-}
-.practice-result {
-  background: var(--raised);
-  padding: 14px;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
 @keyframes recording-pulse {
   50% {
     opacity: 0.35;
@@ -1207,11 +1191,7 @@ input[type="checkbox"] {
   .game-facts span + span::before {
     margin-right: 13px;
   }
-  .home-copy > .text-action {
-    margin-top: 16px;
-    font-size: 13px;
-  }
-  .stage-view {
+    .stage-view {
     height: 285px;
   }
   .entry-heading {
@@ -1410,8 +1390,6 @@ input[type="checkbox"] {
  .wave-lane > div { gap: 2px; }
 }
 
-.home-copy > .text-action { position: absolute; top: 510px; left: 50%; transform: translateX(-50%); white-space: nowrap; }
-@media(max-width:700px) { .home-copy > .text-action { top: 460px; } }
 
 .custom-clips {
   margin-top: 22px;
@@ -1957,50 +1935,7 @@ input[type="checkbox"] {
   }
 }
 
-/* Mic check dialog */
-.mic-check > p {
-  font-size: 15px;
-}
-.mic-check-stage {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin: 18px 0;
-  padding: 18px;
-  border-radius: 14px;
-  background: #58362e;
-  text-align: center;
-}
-.mic-check-step {
-  color: #fff2d7;
-  font-weight: 600;
-}
-.mic-check .count-in {
-  font-size: 64px;
-}
-.mic-check .lyrics {
-  margin: 0;
-  font-size: 28px;
-}
-.mic-check .audio-meter {
-  width: 100%;
-}
-.mic-check-pass,
-.mic-check-fail {
-  padding: 10px 14px;
-  border-radius: 10px;
-  background: var(--raised);
-}
-.mic-check-pass {
-  color: var(--accent);
-}
-.mic-check-fail {
-  color: var(--negative);
-}
 
-.home-copy > .text-action:hover, .home-copy > .text-action:active { transform: translateX(-50%); }
-.home-copy > .text-action { transition: color .15s, background-color .15s; z-index: 10; }
 .reaction-bar { position: static !important; transform: none !important; margin: 8px auto 0; padding: 5px; gap: 6px; flex-wrap: wrap; }
 .reaction-button { width: 38px; height: 38px; font-size: 19px; }
 .reaction-button.wide { width: auto; font-size: 13px; padding: 0 12px; }
@@ -2017,10 +1952,6 @@ input[type="checkbox"] {
 .audio-settings label { gap: 4px; }
 .audio-settings select { min-height: 38px; padding: 8px 12px; }
 .audio-settings button { padding: 10px 16px; min-height: 38px; }
-.audio-settings .practice-actions { margin-top: 4px; }
-.mic-check-stage { padding: 12px; min-height: 120px; }
-.mic-check > p { font-size: 13px; margin: 8px 0; }
-.mic-check .lyrics { font-size: 24px; }
 
 .dialog:has(.audio-settings), .dialog:has(.mic-check) { width: min(680px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
 .dialog:has(.audio-settings) .dialog-inner, .dialog:has(.mic-check) .dialog-inner { padding: 20px; }
@@ -2031,7 +1962,7 @@ input[type="checkbox"] {
 .audio-settings > label select { margin-top: 3px; }
 .audio-settings input[type=range] { margin: 6px 0; }
 .dialog:has(.audio-settings) h2, .dialog:has(.mic-check) h2 { font-size: 22px; }
-@media(min-width:600px) { .audio-settings { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 10px 16px; } .audio-settings .practice-actions, .audio-settings .practice-result { grid-column: 1 / -1; } }
+@media(min-width:600px) { .audio-settings { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 10px 16px; } }
 
 /* The 3D stage and its text overlays fill the space between the phase heading and the bottom controls,
    so the controls never cover the stage on any screen size. */
@@ -2273,5 +2204,74 @@ input[type="checkbox"] {
 @media (prefers-reduced-motion: reduce) {
   .reaction-button.tomato {
     animation: none;
+  }
+}
+
+/* Invitation links put the join form above the stage, so friends can join without scrolling. */
+main.invited {
+  display: flex;
+  flex-direction: column;
+}
+main.invited > .room-entry {
+  order: -1;
+  margin-bottom: 20px;
+}
+
+/* Mic check: a glowing mic that grows with your voice. */
+.mic-check {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+.mic-orb {
+  --level: 0;
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--accent);
+  margin: 10px 0 12px;
+  box-shadow: 0 0 0 calc(var(--level) * 16px) #c6f24e40;
+  transform: scale(calc(1 + var(--level) * 0.15));
+  transition:
+    box-shadow 0.1s linear,
+    transform 0.1s linear;
+}
+.mic-orb svg {
+  width: 38px;
+  height: 46px;
+}
+.mic-orb.passed {
+  background: var(--accent);
+  color: #171917;
+}
+.mic-orb.failed {
+  color: var(--negative);
+}
+.mic-check-title {
+  font-size: 17px;
+  font-weight: 600;
+}
+.mic-check .audio-meter {
+  width: 100%;
+  margin: 0;
+}
+.mic-select {
+  width: 100%;
+  font-size: 13px;
+  text-align: left;
+}
+.mic-select select {
+  display: block;
+  margin-top: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mic-orb {
+    transform: none;
+    transition: none;
   }
 }
