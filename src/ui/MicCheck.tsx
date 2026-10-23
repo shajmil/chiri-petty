@@ -13,7 +13,7 @@ const VOICE_NEEDED_MS = 500;
 const GIVE_UP_MS = 8000;
 const CHECK_EVERY_MS = 100;
 
-/** Everyone says something before readying up, so a silent or wrong microphone is caught in the lobby. */
+/** An optional test before readying up: say something, so a silent or wrong microphone is caught in the lobby. */
 export default function MicCheck({
   audio,
   micLevel,

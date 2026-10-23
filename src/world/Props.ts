@@ -23,10 +23,11 @@ export function buildGuitar(): THREE.Group {
   head.position.y = 1.6;
   guitar.add(lowerBody, upperBody, soundHole, neck, head);
   for (const mesh of [lowerBody, upperBody, neck, head]) mesh.castShadow = true;
-  // Held across the belly with the neck up to the player's left, away from the mic stand.
-  guitar.position.set(-0.1, 1.35, 0.45);
-  guitar.rotation.set(0, 0, -1.0);
-  guitar.scale.setScalar(0.9);
+  // Held across the belly with the neck rising to the player's left, away from the mic stand,
+  // at the angle where the fretting hand lands near the top of the neck.
+  guitar.position.set(-0.15, 1.45, 0.55);
+  guitar.rotation.set(0, 0, -1.135);
+  guitar.scale.setScalar(1.1);
   return guitar;
 }
 

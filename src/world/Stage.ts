@@ -31,6 +31,25 @@ interface StageMove extends ArmPose {
   bounce: number;
 }
 
+/** Where a character's arms, body and mouth are heading; the character eases toward it every frame. */
+interface Pose extends ArmPose {
+  lift: number;
+  leanForward: number;
+  leanSide: number;
+  twist: number;
+  sideStep: number;
+  mouth: number;
+}
+
+interface CharacterState {
+  isPerformer: boolean;
+  isAtMic: boolean;
+  isWalking: boolean;
+  isTalking: boolean;
+  legSwing: number;
+  mouth: number;
+}
+
 // The mic stand is on the performer's left, so the left hand holds it in most moves.
 const PERFORMANCE_MOVES: StageMove[] = [
   { leftX: -1.35, leftZ: -0.15, rightX: -0.4, rightZ: 0.7, sway: 0, bounce: 0.05 }, // hold the mic, other hand open
@@ -45,6 +64,9 @@ type PerformanceStyle = "mic" | "guitar" | "dance" | "surprise";
 // Plain singing is the most common; the others keep each performance a little unpredictable.
 const PERFORMANCE_STYLES: PerformanceStyle[] = ["mic", "mic", "guitar", "dance", "surprise"];
 
+// Calm while a performer walks in, watching while someone sings, applause when a performance ends.
+type CrowdMood = "calm" | "watching" | "applause";
+
 type AudienceReaction =
   | "watch"
   | "clap"
@@ -54,8 +76,7 @@ type AudienceReaction =
   | "laugh"
   | "cheer"
   | "facepalm";
-const AUDIENCE_REACTIONS: AudienceReaction[] = [
-  "clap",
+const SINGING_REACTIONS: AudienceReaction[] = [
   "clap",
   "shocked",
   "dance",
@@ -63,7 +84,6 @@ const AUDIENCE_REACTIONS: AudienceReaction[] = [
   "laugh",
   "cheer",
   "facepalm",
-  "watch",
 ];
 const REACTION_EMOJI: Record<AudienceReaction, string> = {
   watch: "",
@@ -88,12 +108,16 @@ const AUDIENCE_SLOTS = [
   [2.6, 0.5, -2.7],
 ];
 const WALK_SPEED = 2.6;
-const ACCELERATION = 7;
+// Performers hurry, so even the back row reaches the mic before their voice starts.
+const PERFORMER_WALK_SPEED = 4;
+const ACCELERATION = 9;
 const LEG_SWING = 0.55;
 // One step covers the distance the feet travel at full swing, so feet never slide.
 const STEP_LENGTH = 2 * LEG_LENGTH * CHARACTER_SCALE * Math.sin(LEG_SWING);
 const DANCE_SECONDS = 3;
-const SURPRISE_SECONDS = 1.1;
+const SURPRISE_SECONDS = 0.6;
+const BOW_SECONDS = 1.4;
+const APPLAUSE_SECONDS = 3;
 const TOMATO_FLIGHT_SECONDS = 0.75;
 const DODGE_SECONDS = 0.7;
 const BURST_SECONDS = 0.9;
@@ -160,9 +184,14 @@ export class Stage {
   private performanceStyle: PerformanceStyle = "mic";
   private hasSurprised = false;
   private surpriseStartedAt = -100;
+  /** The performer whose voice just ended, who bows while the score is revealed. */
+  public finishedId = "";
   /** The round winner, who dances at the mic while the scores show. */
   public celebrationId = "";
   private crownedId = "";
+  private crowdMood: CrowdMood = "calm";
+  private crowdMoodKey = "";
+  private moodStartedAt = 0;
   /** Which character the portrait shot frames. */
   public focusId = "";
   private shot: CameraShot = "wide";
@@ -429,9 +458,8 @@ export class Stage {
       this.world.rotation.x += (this.pointerY - this.world.rotation.x) * Math.min(1, delta * 5);
     }
     this.updatePerformanceStyle();
+    this.updateCrowdMood();
     if (!this.celebrationId) this.crownedId = "";
-    // Clearing lets the crowd start its next round of reactions at staggered moments.
-    if (!this.talkingId && !this.celebrationId) this.reactions.clear();
     // Name labels would fill the screen in a close portrait, so they hide.
     const showLabels = this.shot !== "portrait" || this.reducedMotion;
     this.castOrder.forEach((id, index) => {
@@ -439,7 +467,6 @@ export class Stage {
       if (!character) return;
       if (character.label) character.label.visible = showLabels;
       this.animateCharacter(character, index, delta);
-      this.applyDodge(character);
     });
     this.animateTomatoes(delta);
     this.animateBursts(delta);
@@ -459,14 +486,25 @@ export class Stage {
           : "mic";
       this.hasSurprised = false;
       this.surpriseStartedAt = -100;
-      // A dance entrance means dancing all the way to the mic.
-      if (this.performanceStyle === "dance") this.startDance(this.performerId);
     }
     const guitarOwnerId = this.performanceStyle === "guitar" ? this.performerId : "";
     if (guitarOwnerId === this.guitarOwnerId) return;
     this.guitar.removeFromParent();
     this.characters.get(guitarOwnerId)?.body.add(this.guitar);
     this.guitarOwnerId = guitarOwnerId;
+  }
+
+  private updateCrowdMood(): void {
+    const mood: CrowdMood =
+      this.finishedId || this.celebrationId ? "applause" : this.talkingId ? "watching" : "calm";
+    // The ids are part of the key, so the crowd applauds again for the round winner
+    // even straight after applauding the last performance.
+    const moodKey = `${mood}:${this.finishedId}:${this.celebrationId}`;
+    if (moodKey === this.crowdMoodKey) return;
+    this.crowdMoodKey = moodKey;
+    this.crowdMood = mood;
+    this.moodStartedAt = this.time;
+    this.reactions.clear();
   }
 
   private moveCamera(delta: number): void {
@@ -507,7 +545,8 @@ export class Stage {
     const distance = toTarget.length();
 
     // Speed up toward walking pace and brake smoothly so the character stops on its mark.
-    const desiredSpeed = distance < 0.01 ? 0 : Math.min(WALK_SPEED, Math.sqrt(2 * ACCELERATION * distance));
+    const walkSpeed = isPerformer ? PERFORMER_WALK_SPEED : WALK_SPEED;
+    const desiredSpeed = distance < 0.01 ? 0 : Math.min(walkSpeed, Math.sqrt(2 * ACCELERATION * distance));
     const speedChange = desiredSpeed - character.speed;
     character.speed += Math.sign(speedChange) * Math.min(Math.abs(speedChange), ACCELERATION * delta);
     const step = Math.min(distance, character.speed * delta);
@@ -531,52 +570,59 @@ export class Stage {
     if (!isPerformer && distance < 0.1 && character.splats.length) this.clearSplats(character);
 
     const isAtMic = isPerformer && distance < 0.2;
+    if (isAtMic) this.arriveAtMic(character);
     const isTalking = id === this.talkingId && distance < 0.2;
-    const mouthOpen = isTalking
+    const mouth = isTalking
       ? 0.3 + this.level * 2 + Math.abs(Math.sin(this.time * 8)) * this.level
       : this.chorus
         ? 0.3 + Math.abs(Math.sin(this.time * 7 + index)) * 0.5
         : 0.3;
-    character.mouth.scale.y = this.reducedMotion ? Math.min(mouthOpen, 0.8) : mouthOpen;
-    if (isAtMic) this.arriveAtMic(character);
+    const pose = this.choosePose(character, index, {
+      isPerformer,
+      isAtMic,
+      isWalking,
+      isTalking,
+      legSwing,
+      mouth,
+    });
+    this.addDodge(character, pose);
+    this.easePose(character, pose, delta);
+  }
 
-    const danceProgress = (this.time - character.danceStartedAt) / DANCE_SECONDS;
-    const isDancing = danceProgress >= 0 && danceProgress < 1;
-    if (isDancing) {
-      const beat = this.time * 9;
-      character.body.position.y = this.reducedMotion ? 0 : Math.abs(Math.sin(beat)) * 0.35;
-      character.body.rotation.y = this.reducedMotion ? 0 : danceProgress * Math.PI * 2;
-      character.leftArm.rotation.set(0, 0, -2.5 - Math.sin(beat) * 0.35);
-      character.rightArm.rotation.set(0, 0, 2.5 - Math.sin(beat + 1) * 0.35);
-      if (!isWalking) {
-        character.leftLeg.rotation.x = Math.max(0, Math.sin(beat)) * 0.4;
-        character.rightLeg.rotation.x = Math.max(0, -Math.sin(beat)) * 0.4;
-      }
-      return;
-    }
-    character.body.rotation.y = 0;
-    character.body.rotation.x = 0;
-    character.body.rotation.z = 0;
-    character.body.position.y = this.reducedMotion ? 0 : Math.sin(this.time * 2 + index) * 0.02;
+  // Picks what the character is doing right now, most important first.
+  private choosePose(character: Character, index: number, state: CharacterState): Pose {
+    const id = character.actor.id;
+    const armSwing = -state.legSwing * 0.8;
+    const pose: Pose = {
+      leftX: armSwing,
+      leftZ: 0,
+      rightX: -armSwing,
+      rightZ: 0,
+      lift: Math.sin(this.time * 2 + index) * 0.02,
+      leanForward: 0,
+      leanSide: 0,
+      twist: 0,
+      sideStep: 0,
+      mouth: state.mouth,
+    };
+    if (this.reducedMotion) return { ...pose, lift: 0, mouth: Math.min(state.mouth, 0.8) };
 
-    const armSwing = -legSwing * 0.8;
-    const walkingArms = { leftX: armSwing, leftZ: 0, rightX: -armSwing, rightZ: 0 };
+    const isDanceEntrance =
+      state.isPerformer && state.isWalking && this.performanceStyle === "dance";
     const surpriseProgress = (this.time - this.surpriseStartedAt) / SURPRISE_SECONDS;
-    if (this.reducedMotion) {
-      this.easeArms(character, walkingArms, delta);
-    } else if (isPerformer && surpriseProgress >= 0 && surpriseProgress < 1) {
-      this.surprise(character, surpriseProgress, delta);
-    } else if (id === this.celebrationId && isAtMic) {
-      this.celebrate(character, delta);
-    } else if (id === this.guitarOwnerId) {
-      this.playGuitar(character, isTalking, delta);
-    } else if (isTalking) {
-      this.perform(character, index, delta);
-    } else if ((this.talkingId || this.celebrationId) && !isWalking && !isPerformer) {
-      this.react(character, this.nextReaction(character), index, delta);
-    } else {
-      this.easeArms(character, walkingArms, delta);
-    }
+    if (isDanceEntrance || this.time - character.danceStartedAt < DANCE_SECONDS)
+      return this.dancePose(pose, character, state.isWalking);
+    if (state.isPerformer && state.isWalking && this.performanceStyle === "surprise")
+      return this.hopPose(pose, character);
+    if (state.isPerformer && surpriseProgress >= 0 && surpriseProgress < 1)
+      return this.taDaPose(pose, surpriseProgress);
+    if (id === this.celebrationId && state.isAtMic) return this.celebratePose(pose);
+    if (id === this.finishedId && state.isAtMic) return this.bowPose(pose);
+    if (id === this.guitarOwnerId) return this.guitarPose(pose, state.isTalking);
+    if (state.isTalking) return this.performPose(pose, index);
+    if (this.crowdMood !== "calm" && !state.isWalking && !state.isPerformer)
+      return this.reactionPose(pose, this.nextReaction(character, index), index);
+    return pose;
   }
 
   // Special entrances and the winner's crown start once the character reaches the mic.
@@ -595,130 +641,216 @@ export class Stage {
     }
   }
 
+  private dancePose(pose: Pose, character: Character, isWalking: boolean): Pose {
+    const beat = this.time * 9;
+    if (!isWalking) {
+      character.leftLeg.rotation.x = Math.max(0, Math.sin(beat)) * 0.4;
+      character.rightLeg.rotation.x = Math.max(0, -Math.sin(beat)) * 0.4;
+    }
+    return {
+      ...pose,
+      lift: Math.abs(Math.sin(beat)) * 0.35,
+      twist: this.time * 2.1,
+      leftX: 0,
+      leftZ: -2.5 - Math.sin(beat) * 0.35,
+      rightX: 0,
+      rightZ: 2.5 - Math.sin(beat + 1) * 0.35,
+    };
+  }
+
+  // The surprise entrance: bouncing to the mic with both feet together and arms up, about two hops a second.
+  private hopPose(pose: Pose, character: Character): Pose {
+    const hop = Math.abs(Math.sin(character.stridePhase / 3));
+    character.leftLeg.rotation.x = -hop * 0.3;
+    character.rightLeg.rotation.x = -hop * 0.3;
+    return { ...pose, lift: hop * 0.5, leftX: 0, leftZ: -2.3, rightX: 0, rightZ: 2.3 };
+  }
+
+  // Landing at the mic with a "ta-da!".
+  private taDaPose(pose: Pose, progress: number): Pose {
+    return {
+      ...pose,
+      lift: Math.sin(progress * Math.PI) * 0.5,
+      mouth: 1.1,
+      leftX: 0,
+      leftZ: -2.8,
+      rightX: 0,
+      rightZ: 2.8,
+    };
+  }
+
+  private celebratePose(pose: Pose): Pose {
+    const beat = this.time * 8;
+    const pump = Math.sin(beat) * 0.35;
+    return {
+      ...pose,
+      lift: Math.abs(Math.sin(beat)) * 0.3,
+      twist: Math.sin(this.time * 2.5) * 0.6,
+      mouth: 0.9,
+      leftX: 0,
+      leftZ: -2.6 + pump,
+      rightX: 0,
+      rightZ: 2.6 + pump,
+    };
+  }
+
+  // When the voice ends the performer bows, then waves while the score is revealed.
+  private bowPose(pose: Pose): Pose {
+    const progress = (this.time - this.moodStartedAt) / BOW_SECONDS;
+    if (progress < 1)
+      return {
+        ...pose,
+        leanForward: Math.sin(progress * Math.PI) * 0.35,
+        leftX: -0.6,
+        leftZ: 0.7,
+        rightX: 0.4,
+        rightZ: 0,
+      };
+    return { ...pose, rightX: 0, rightZ: 2.5 + Math.sin(this.time * 9) * 0.35 };
+  }
+
+  // One hand strums over the sound hole while the other holds the top of the neck; a louder voice strums harder.
+  private guitarPose(pose: Pose, isStrumming: boolean): Pose {
+    const strum = isStrumming ? Math.sin(this.time * 16) * (0.12 + this.level * 0.3) : 0;
+    return {
+      ...pose,
+      leftX: -0.94 + strum,
+      leftZ: 0.73,
+      rightX: -1.83,
+      rightZ: 0.75,
+      leanSide: isStrumming ? Math.sin(this.time * 4) * 0.06 : 0,
+      lift: isStrumming ? Math.abs(Math.sin(this.time * 8)) * 0.05 : 0,
+    };
+  }
+
   // A singing performer cycles through stage moves; a louder voice makes bigger moves.
-  private perform(character: Character, index: number, delta: number): void {
+  private performPose(pose: Pose, index: number): Pose {
     const move =
       PERFORMANCE_MOVES[Math.floor(this.time / MOVE_SECONDS + index) % PERFORMANCE_MOVES.length];
     const energy = 0.55 + Math.min(1, this.level * 1.8) * 0.45;
-    this.easeArms(
-      character,
-      {
-        leftX: move.leftX * energy,
-        leftZ: move.leftZ * energy,
-        rightX: move.rightX * energy,
-        rightZ: move.rightZ * energy,
-      },
-      delta,
-    );
-    character.body.rotation.z = Math.sin(this.time * 3) * move.sway;
-    character.body.rotation.x = Math.sin(this.time * 5) * 0.05 * this.level;
-    character.body.position.y = Math.abs(Math.sin(this.time * 6)) * move.bounce * (0.5 + this.level);
+    return {
+      ...pose,
+      leftX: move.leftX * energy,
+      leftZ: move.leftZ * energy,
+      rightX: move.rightX * energy,
+      rightZ: move.rightZ * energy,
+      leanSide: Math.sin(this.time * 3) * move.sway,
+      leanForward: Math.sin(this.time * 5) * 0.05 * this.level,
+      lift: Math.abs(Math.sin(this.time * 6)) * move.bounce * (0.5 + this.level),
+    };
   }
 
-  // One hand strums the guitar body while the other holds the neck; a louder voice strums harder.
-  private playGuitar(character: Character, isStrumming: boolean, delta: number): void {
-    const strum = isStrumming ? Math.sin(this.time * 16) * (0.15 + this.level * 0.4) : 0;
-    this.easeArms(character, { leftX: -0.7 + strum, leftZ: 0.55, rightX: -1.25, rightZ: 0.2 }, delta);
-    if (!isStrumming) return;
-    character.body.rotation.z = Math.sin(this.time * 4) * 0.06;
-    character.body.position.y = Math.abs(Math.sin(this.time * 8)) * 0.05;
-  }
-
-  // A "ta-da!" spin jump with arms flung up.
-  private surprise(character: Character, progress: number, delta: number): void {
-    character.body.position.y = Math.sin(progress * Math.PI) * 0.9;
-    character.body.rotation.y = progress * Math.PI * 2;
-    character.mouth.scale.y = 1.1;
-    this.easeArms(character, { leftX: 0, leftZ: -2.7, rightX: 0, rightZ: 2.7 }, delta);
-  }
-
-  private celebrate(character: Character, delta: number): void {
-    const beat = this.time * 8;
-    const pump = Math.sin(beat) * 0.35;
-    character.body.position.y = Math.abs(Math.sin(beat)) * 0.3;
-    character.body.rotation.y = Math.sin(this.time * 2.5) * 0.6;
-    character.mouth.scale.y = 0.9;
-    this.easeArms(character, { leftX: 0, leftZ: -2.6 + pump, rightX: 0, rightZ: 2.6 + pump }, delta);
-  }
-
-  // Each audience member switches to a new random reaction every few seconds, at their own moments.
-  private nextReaction(character: Character): AudienceReaction {
+  private nextReaction(character: Character, index: number): AudienceReaction {
+    if (this.crowdMood === "applause") {
+      // Everyone applauds together, each starting a moment apart, then settles down to watch.
+      const sinceApplauseStarted = this.time - this.moodStartedAt - index * 0.15;
+      if (sinceApplauseStarted < 0 || sinceApplauseStarted > APPLAUSE_SECONDS) return "watch";
+      return index % 3 === 2 ? "cheer" : "clap";
+    }
     const id = character.actor.id;
     const current = this.reactions.get(id);
-    if (!current) {
-      this.reactions.set(id, { reaction: "watch", until: this.time + Math.random() * 1.5 });
+    if (current && this.time < current.until) return current.reaction;
+    // Mostly people just watch; now and then someone reacts, then goes back to watching.
+    const shouldReact = current?.reaction === "watch" && Math.random() < 0.45;
+    if (!shouldReact) {
+      const watchSeconds = current ? 1.5 + Math.random() * 2 : 0.5 + Math.random() * 2;
+      this.reactions.set(id, { reaction: "watch", until: this.time + watchSeconds });
       return "watch";
     }
-    if (this.time < current.until) return current.reaction;
-    const reaction = AUDIENCE_REACTIONS[Math.floor(Math.random() * AUDIENCE_REACTIONS.length)];
-    this.reactions.set(id, { reaction, until: this.time + 2 + Math.random() * 2 });
+    const reaction = SINGING_REACTIONS[Math.floor(Math.random() * SINGING_REACTIONS.length)];
+    this.reactions.set(id, { reaction, until: this.time + 1.5 + Math.random() * 1.5 });
     // Bubbles only during rounds, so the lobby and home stage stay calm.
-    if (this.isRoundFraming && reaction !== "watch" && Math.random() < 0.45)
+    if (this.isRoundFraming && Math.random() < 0.35)
       this.showEmote(id, REACTION_EMOJI[reaction], 0.65);
     return reaction;
   }
 
-  private react(character: Character, reaction: AudienceReaction, index: number, delta: number): void {
-    const body = character.body;
+  private reactionPose(pose: Pose, reaction: AudienceReaction, index: number): Pose {
     const beat = this.time * 9 + index;
     if (reaction === "clap") {
       const clap = Math.sin(this.time * 14) * 0.25;
-      this.easeArms(character, { leftX: -1, leftZ: 0.45 + clap, rightX: -1, rightZ: -0.45 - clap }, delta);
-    } else if (reaction === "shocked") {
-      body.rotation.x = -0.15;
-      character.mouth.scale.y = 1.2;
-      this.easeArms(character, { leftX: -2.35, leftZ: 0.55, rightX: -2.35, rightZ: -0.55 }, delta);
-    } else if (reaction === "dance") {
-      body.position.y = Math.abs(Math.sin(beat)) * 0.25;
-      body.rotation.z = Math.sin(beat / 2) * 0.15;
-      const wave = Math.sin(beat) * 0.4;
-      this.easeArms(character, { leftX: 0, leftZ: -2.4 - wave, rightX: 0, rightZ: 2.4 - wave }, delta);
-    } else if (reaction === "angry") {
-      const shake = Math.sin(this.time * 20) * 0.25;
-      body.rotation.x = 0.12;
-      this.easeArms(character, { leftX: -0.2, leftZ: -0.5, rightX: -2.7 + shake, rightZ: 0.2 }, delta);
-    } else if (reaction === "laugh") {
-      const giggle = Math.abs(Math.sin(this.time * 12));
-      body.rotation.x = -0.1 + giggle * 0.12;
-      character.mouth.scale.y = 0.7 + giggle * 0.5;
-      this.easeArms(character, { leftX: -0.7, leftZ: 0.5, rightX: -0.7, rightZ: -0.5 }, delta);
-    } else if (reaction === "cheer") {
-      const pump = Math.sin(this.time * 10) * 0.3;
-      body.position.y = Math.max(0, Math.sin(this.time * 10)) * 0.2;
-      this.easeArms(character, { leftX: -0.3, leftZ: -2.6 + pump, rightX: -0.3, rightZ: 2.6 - pump }, delta);
-    } else if (reaction === "facepalm") {
-      body.rotation.x = 0.18;
-      this.easeArms(character, { leftX: -0.1, leftZ: 0, rightX: -2.35, rightZ: -0.55 }, delta);
-    } else {
-      this.easeArms(character, { leftX: 0, leftZ: 0, rightX: 0, rightZ: 0 }, delta);
+      return { ...pose, leftX: -1, leftZ: 0.45 + clap, rightX: -1, rightZ: -0.45 - clap };
     }
+    if (reaction === "shocked")
+      return { ...pose, leanForward: -0.15, mouth: 1.2, leftX: -2.35, leftZ: 0.55, rightX: -2.35, rightZ: -0.55 };
+    if (reaction === "dance") {
+      const wave = Math.sin(beat) * 0.4;
+      return {
+        ...pose,
+        lift: Math.abs(Math.sin(beat)) * 0.25,
+        leanSide: Math.sin(beat / 2) * 0.15,
+        leftX: 0,
+        leftZ: -2.4 - wave,
+        rightX: 0,
+        rightZ: 2.4 - wave,
+      };
+    }
+    if (reaction === "angry") {
+      const shake = Math.sin(this.time * 20) * 0.25;
+      return { ...pose, leanForward: 0.12, leftX: -0.2, leftZ: -0.5, rightX: -2.7 + shake, rightZ: 0.2 };
+    }
+    if (reaction === "laugh") {
+      const giggle = Math.abs(Math.sin(this.time * 12));
+      return {
+        ...pose,
+        leanForward: -0.1 + giggle * 0.12,
+        mouth: 0.7 + giggle * 0.5,
+        leftX: -0.7,
+        leftZ: 0.5,
+        rightX: -0.7,
+        rightZ: -0.5,
+      };
+    }
+    if (reaction === "cheer") {
+      const pump = Math.sin(this.time * 10) * 0.3;
+      return {
+        ...pose,
+        lift: Math.max(0, Math.sin(this.time * 10)) * 0.2,
+        leftX: -0.3,
+        leftZ: -2.6 + pump,
+        rightX: -0.3,
+        rightZ: 2.6 - pump,
+      };
+    }
+    if (reaction === "facepalm")
+      return { ...pose, leanForward: 0.18, leftX: -0.1, leftZ: 0, rightX: -2.35, rightZ: -0.55 };
+    return { ...pose, leftX: 0, rightX: 0 };
   }
 
-  // Arms ease toward each pose, so switching moves never snaps.
-  private easeArms(character: Character, pose: ArmPose, delta: number): void {
+  // A dodging character hops sideways and leans away, then settles back.
+  private addDodge(character: Character, pose: Pose): void {
+    const dodge = this.dodges.get(character.actor.id);
+    if (!dodge) return;
+    const progress = (this.time - dodge.startedAt) / DODGE_SECONDS;
+    if (progress >= 1) this.dodges.delete(character.actor.id);
+    if (progress < 0 || progress >= 1) return;
+    const amount = Math.sin(progress * Math.PI);
+    pose.sideStep = dodge.side * amount * 1.1;
+    pose.lift += amount * 0.25;
+    pose.leanSide = -dodge.side * amount * 0.35;
+  }
+
+  // Everything eases toward the pose, so switching between moves never snaps.
+  private easePose(character: Character, pose: Pose, delta: number): void {
     const ease = 1 - Math.exp(-delta * 14);
-    const { leftArm, rightArm } = character;
+    const { body, leftArm, rightArm, mouth } = character;
     leftArm.rotation.y = 0;
     rightArm.rotation.y = 0;
     leftArm.rotation.x += (pose.leftX - leftArm.rotation.x) * ease;
     leftArm.rotation.z += (pose.leftZ - leftArm.rotation.z) * ease;
     rightArm.rotation.x += (pose.rightX - rightArm.rotation.x) * ease;
     rightArm.rotation.z += (pose.rightZ - rightArm.rotation.z) * ease;
-  }
-
-  // A dodging character hops sideways and leans away, then settles back.
-  private applyDodge(character: Character): void {
-    const dodge = this.dodges.get(character.actor.id);
-    const progress = dodge ? (this.time - dodge.startedAt) / DODGE_SECONDS : -1;
-    if (!dodge || progress < 0 || progress >= 1) {
-      character.body.position.x = 0;
-      if (progress >= 1) this.dodges.delete(character.actor.id);
-      return;
-    }
-    const amount = Math.sin(progress * Math.PI);
-    character.body.position.x = dodge.side * amount * 1.1;
-    character.body.position.y += amount * 0.25;
-    character.body.rotation.z = -dodge.side * amount * 0.35;
+    body.position.x += (pose.sideStep - body.position.x) * ease;
+    body.position.y += (pose.lift - body.position.y) * ease;
+    body.rotation.x += (pose.leanForward - body.rotation.x) * ease;
+    body.rotation.z += (pose.leanSide - body.rotation.z) * ease;
+    // Turn the short way round, so finishing a spin never unwinds it.
+    const twistLeft = Math.atan2(
+      Math.sin(pose.twist - body.rotation.y),
+      Math.cos(pose.twist - body.rotation.y),
+    );
+    body.rotation.y += twistLeft * ease;
+    mouth.scale.y += (pose.mouth - mouth.scale.y) * ease;
   }
 
   private animateTomatoes(delta: number): void {

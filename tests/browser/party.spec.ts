@@ -14,11 +14,10 @@ async function createTabRoom(page: Page, name: string) {
   return (await page.locator(".room-code").innerText()).trim();
 }
 
-// Ready-up requires passing one sample mic test first.
+// The first ready-up asks once whether the mic works.
 async function readyUp(page: Page) {
-  await page.getByRole("button", { name: "Mic check & ready up" }).click();
-  await expect(page.locator(".mic-orb.passed")).toBeVisible({ timeout: 15000 });
-  await page.getByRole("button", { name: "Done" }).click();
+  await page.getByRole("button", { name: "Ready up", exact: true }).click();
+  await page.getByRole("button", { name: "Yes, I’m ready" }).click();
   await expect(
     page.getByRole("button", { name: "Ready · Change my mind" }),
   ).toBeVisible();
@@ -109,7 +108,7 @@ test("complete two-player, two-round match using real browser recording and loca
   });
   await page.getByRole("button", { name: "One more party" }).click();
   await expect(
-    page.getByRole("button", { name: "Mic check & ready up" }),
+    page.getByRole("button", { name: "Ready up", exact: true }),
   ).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -322,7 +321,7 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
   expect(errors).toEqual([]);
 });
 
-test("ready-up requires passing the mic check; a silent mic fails", async ({
+test("ready-up asks about the mic once; the optional mic test catches a silent mic", async ({
   page,
   context,
 }) => {
@@ -334,12 +333,21 @@ test("ready-up requires passing the mic check; a silent mic fails", async ({
     navigator.mediaDevices.getUserMedia = async () =>
       new AudioContext().createMediaStreamDestination().stream;
   });
-  await page.getByRole("button", { name: "Mic check & ready up" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Mic check");
+  await page.getByRole("button", { name: "Ready up", exact: true }).click();
+  await expect(page.getByRole("dialog")).toContainText("Is your mic working?");
+  await page.getByRole("button", { name: "Test my mic" }).click();
   await expect(page.locator(".mic-orb.failed")).toBeVisible({ timeout: 15000 });
   await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
   await page.getByRole("button", { name: "Close dialog" }).click();
   await expect(page.getByRole("button", { name: "Start the chaos" })).toBeDisabled();
+
+  await readyUp(page);
+  await expect(page.getByRole("button", { name: "Start the chaos" })).toBeEnabled();
+  await page.getByRole("button", { name: "Ready · Change my mind" }).click();
+  // Confirmed once per visit, so readying up again skips the question.
+  await page.getByRole("button", { name: "Ready up", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ready · Change my mind" })).toBeVisible();
 });
 
 test("an invitation link puts joining first, with no scrolling on a phone", async ({ page }) => {

@@ -21,6 +21,8 @@ export interface StageScene {
   shot: CameraShot;
   /** Identifies the current performance, so every screen picks the same entrance for it. */
   performanceKey: string;
+  /** The performer whose voice just ended, who bows while the score is revealed. */
+  finishedId: string;
   /** The round winner, who celebrates at the mic while the scores show. */
   celebrationId: string;
   /** The home page has its own big title, so it hides the graffiti logo on the wall. */
@@ -75,6 +77,7 @@ export default function StageView({
       stage.current.setCast(current.actors);
       stage.current.performerId = current.performerId;
       stage.current.performanceKey = current.performanceKey;
+      stage.current.finishedId = current.finishedId;
       stage.current.celebrationId = current.celebrationId;
       stage.current.talkingId = current.talkingId;
       stage.current.chorus = current.chorus;

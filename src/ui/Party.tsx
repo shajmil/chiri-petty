@@ -42,6 +42,7 @@ type Dialog =
   | "packs"
   | "settings"
   | "setup"
+  | "ready-check"
   | "mic-check"
   | null;
 
@@ -63,7 +64,7 @@ export default function Party() {
   const [volume, setVolume] = useState(0.7);
   const [reducedMotion, setReducedMotion] = useState(false);
   const [micReady, setMicReady] = useState(false);
-  const [micCheckPassed, setMicCheckPassed] = useState(false);
+  const [isMicConfirmed, setIsMicConfirmed] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
   const [deviceId, setDeviceId] = useState("");
   const [micLevel, setMicLevel] = useState(0);
@@ -141,6 +142,7 @@ export default function Party() {
     focusId: "",
     shot: "wide",
     performanceKey: "",
+    finishedId: "",
     celebrationId: "",
     showWallLogo: false,
   };
@@ -161,9 +163,12 @@ export default function Party() {
           : room?.phase === "SCORING"
             ? roundWinnerId(room)
             : "",
+    // A performer only sings while their take plays: not on the walk up, not during the score reveal.
     talkingId:
       room?.phase === "PLAYBACK"
-        ? (currentTake?.playerId ?? "")
+        ? isPerforming && !isScoreRevealed
+          ? (currentTake?.playerId ?? "")
+          : ""
         : isRecordingLive || (room?.phase === "LOBBY" && micReady)
           ? (game?.playerId ?? "")
           : "",
@@ -182,6 +187,7 @@ export default function Party() {
         : room?.phase === "RECORDING"
           ? `${room.roundId}:${game?.playerId}`
           : "",
+    finishedId: isScoreRevealed ? (currentTake?.playerId ?? "") : "",
     celebrationId: room?.phase === "SCORING" ? roundWinnerId(room) : "",
   };
 
@@ -257,20 +263,25 @@ export default function Party() {
       await game.command({ type: "ready", ready: false });
       return;
     }
-    // Everyone passes one sample test before their first ready-up in this visit.
-    if (!micCheckPassed) {
+    // The first ready-up of a visit asks once whether the mic works; the mic test is optional.
+    if (!isMicConfirmed) {
       void audio.unlock();
-      setDialog("mic-check");
+      setDialog("ready-check");
       return;
     }
-    if (await enableMic()) {
-      await audio.unlock();
-      await game.command({ type: "ready", ready: true });
-    }
+    await confirmReady();
+  }
+
+  async function confirmReady() {
+    setDialog(null);
+    if (!(await enableMic())) return;
+    await audio.unlock();
+    setIsMicConfirmed(true);
+    await game?.command({ type: "ready", ready: true });
   }
 
   async function passMicCheck() {
-    setMicCheckPassed(true);
+    setIsMicConfirmed(true);
     await game?.command({ type: "ready", ready: true });
   }
 
@@ -658,7 +669,7 @@ export default function Party() {
                         >
                           {me?.ready
                             ? "Ready · Change my mind"
-                            : "Mic check & ready up"}
+                            : "Ready up"}
                         </button>
                         {game.isHost && (
                           <button
@@ -983,10 +994,25 @@ export default function Party() {
                   ? "Connect your online party."
                   : dialog === "mic-check"
                     ? "Mic check"
-                    : "Make yourself heard."
+                    : dialog === "ready-check"
+                      ? "Ready?"
+                      : "Make yourself heard."
           }
           close={closeDialog}
         >
+          {dialog === "ready-check" && (
+            <div className="ready-check">
+              <p>Is your mic working? Everyone records at the same time each round.</p>
+              <div className="lobby-buttons">
+                <button className="primary" onClick={() => void confirmReady()}>
+                  Yes, I’m ready
+                </button>
+                <button className="secondary" onClick={() => setDialog("mic-check")}>
+                  Test my mic
+                </button>
+              </div>
+            </div>
+          )}
           {dialog === "mic-check" && (
             <MicCheck
               audio={audio}

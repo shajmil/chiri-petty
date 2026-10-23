@@ -1964,6 +1964,25 @@ input[type="checkbox"] {
 .dialog:has(.audio-settings) h2, .dialog:has(.mic-check) h2 { font-size: 22px; }
 @media(min-width:600px) { .audio-settings { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 10px 16px; } }
 
+/* Big monitors: rounds use the whole width instead of a narrow centre column. */
+@media (min-width: 1400px) {
+  main.match-view,
+  .topbar:has(~ main.match-view) {
+    width: min(1800px, calc(100% - 64px));
+  }
+  .match-view .game-layout {
+    grid-template-columns: 260px 1fr;
+  }
+}
+
+.dialog:has(.ready-check) {
+  width: min(440px, calc(100vw - 24px));
+}
+.ready-check p {
+  margin: 0 0 18px;
+  color: var(--muted);
+}
+
 /* The 3D stage and its text overlays fill the space between the phase heading and the bottom controls,
    so the controls never cover the stage on any screen size. */
 .stage-area {
