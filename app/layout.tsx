@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import "@fontsource/anek-malayalam/latin-400.css";
 import "@fontsource/anek-malayalam/latin-600.css";
 import "@fontsource/anek-malayalam/malayalam-400.css";
@@ -16,7 +17,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="ml">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
