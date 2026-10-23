@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import type { StageEvent } from "../game/types";
+import { buildRoom } from "./Room";
 import {
-  box,
   buildCharacter,
   CHARACTER_SCALE,
   disposeObject,
@@ -9,7 +9,6 @@ import {
   HEAD_HEIGHT,
   HEAD_RADIUS,
   LEG_LENGTH,
-  sphere,
   type Character,
   type SharedMaterials,
   type StageActor,
@@ -18,6 +17,28 @@ import {
 export type CameraShot = "wide" | "portrait" | "medium";
 
 const MIC_SPOT = new THREE.Vector3(0, 0, 1.6);
+
+interface ArmPose {
+  leftX: number;
+  leftZ: number;
+  rightX: number;
+  rightZ: number;
+}
+
+interface StageMove extends ArmPose {
+  sway: number;
+  bounce: number;
+}
+
+// The mic stand is on the performer's left, so the left hand holds it in most moves.
+const PERFORMANCE_MOVES: StageMove[] = [
+  { leftX: -1.35, leftZ: -0.15, rightX: -0.4, rightZ: 0.7, sway: 0, bounce: 0.05 }, // hold the mic, other hand open
+  { leftX: -1.35, leftZ: -0.15, rightX: -2.35, rightZ: -0.55, sway: 0, bounce: 0.03 }, // hand to face
+  { leftX: -1.35, leftZ: -0.15, rightX: -2.9, rightZ: 0.25, sway: 0, bounce: 0.12 }, // arm raised
+  { leftX: -0.3, leftZ: -1.15, rightX: -0.3, rightZ: 1.15, sway: 0, bounce: 0.06 }, // arms wide
+  { leftX: -1.35, leftZ: -0.15, rightX: -0.2, rightZ: 0.25, sway: 0.14, bounce: 0.04 }, // sway
+];
+const MOVE_SECONDS = 1.6;
 // The first four players stand on the floor; players five to eight stand on the back riser.
 const AUDIENCE_SLOTS = [
   [-2.0, 0, -0.9],
@@ -82,6 +103,10 @@ export class Stage {
   private readonly lookGoal = new THREE.Vector3();
   private readonly currentLook = new THREE.Vector3();
   private hasFramed = false;
+  private readonly wallLogo: THREE.Mesh;
+  /** The home page shows its own big title, so it hides the wall logo. */
+  public showWallLogo = true;
+  public onTomatoHit: (() => void) | null = null;
   public reducedMotion = false;
   private isRoundFraming = false;
 
@@ -97,8 +122,8 @@ export class Stage {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
-    this.scene.add(new THREE.HemisphereLight(0xffffff, 0x55594e, 3));
-    const key = new THREE.DirectionalLight(0xfff4e2, 5);
+    this.scene.add(new THREE.HemisphereLight(0xfff1e0, 0x3a2620, 2.2));
+    const key = new THREE.DirectionalLight(0xffe6c8, 3.2);
     key.position.set(4, 8, 5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -107,7 +132,7 @@ export class Stage {
     key.shadow.camera.top = 6;
     key.shadow.camera.bottom = -6;
     this.scene.add(key);
-    const fill = new THREE.DirectionalLight(0xffffff, 2);
+    const fill = new THREE.DirectionalLight(0xffffff, 1.2);
     fill.position.set(-5, 4, -1);
     this.scene.add(fill);
     this.scene.add(this.world);
@@ -117,7 +142,12 @@ export class Stage {
       you: this.material(0xc6f24e),
     };
     this.tomatoMaterial = this.material(0xc8281e);
-    this.buildRoom();
+    this.wallLogo = buildRoom(
+      this.scene,
+      this.world,
+      this.materials,
+      new THREE.Vector3(-0.85, 0, MIC_SPOT.z + 0.75),
+    );
     this.observer = new ResizeObserver(() => this.resize());
     this.observer.observe(canvas);
     canvas.addEventListener("pointermove", this.onPointer);
@@ -130,58 +160,6 @@ export class Stage {
     return new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
   }
 
-  private buildRoom(): void {
-    this.scene.background = new THREE.Color(0x58362e);
-    const wood = this.material(0xb76d3e);
-    const { cream, ink } = this.materials;
-    box(this.world, [22, 12, 0.2], [0, 4, -4], this.material(0x744538));
-    for (let i = -10; i <= 10; i++)
-      box(this.world, [0.97, 0.15, 15], [i, -0.1, 0], wood, 0.01);
-    const rug = new THREE.Mesh(
-      new THREE.CylinderGeometry(3.9, 3.9, 0.05, 64),
-      this.material(0x287c79),
-    );
-    rug.position.set(0, 0.04, 0.4);
-    this.world.add(rug);
-    const edge = new THREE.Mesh(new THREE.TorusGeometry(3.7, 0.035, 8, 80), cream);
-    edge.rotation.x = Math.PI / 2;
-    edge.position.set(0, 0.08, 0.4);
-    this.world.add(edge);
-    for (let i = 0; i < 17; i++) {
-      const x = -8 + i;
-      const y = 5.7 - 0.3 * Math.cos(x * 0.65);
-      sphere(this.world, 0.12, [x, y, -2], this.material(i % 2 ? 0xffc866 : 0xf39f9b));
-    }
-    const wire = new THREE.CatmullRomCurve3(
-      Array.from({ length: 65 }, (_, i) => {
-        const x = -8 + i / 4;
-        return new THREE.Vector3(x, 5.84 - 0.3 * Math.cos(x * 0.65), -2);
-      }),
-    );
-    this.world.add(new THREE.Mesh(new THREE.TubeGeometry(wire, 80, 0.018, 6, false), ink));
-    for (const side of [-1, 1]) {
-      box(this.world, [0.9, 7, 0.65], [side * 7, 3, -2.5], this.material(0x9c3c4a));
-      for (const height of [1.9, 3.3]) {
-        box(this.world, [2.2, 0.12, 0.7], [side * 5, height, -3.5], wood);
-        for (let n = 0; n < 3; n++)
-          sphere(
-            this.world,
-            0.25,
-            [side * 5 - 0.7 + n * 0.7, height + 0.32, -3.4],
-            this.material([0xf6ba55, 0x5da79a, 0xe7787f][n]),
-          );
-      }
-    }
-    box(this.world, [7, 0.5, 1.4], [0, 0.25, -2.7], this.material(0x8a5233), 0.05);
-    const microphone = new THREE.Group();
-    microphone.position.set(-0.85, 0, MIC_SPOT.z + 0.75);
-    box(microphone, [0.08, 1.9, 0.08], [0, 0.95, 0], ink);
-    box(microphone, [0.5, 0.08, 0.4], [0, 0.04, 0], ink);
-    box(microphone, [0.26, 0.46, 0.26], [0, 2.05, 0], cream, 0.12);
-    for (let i = 0; i < 4; i++)
-      box(microphone, [0.22, 0.02, 0.03], [0, 1.92 + i * 0.08, 0.13], ink, 0.005);
-    this.world.add(microphone);
-  }
 
   private slotPosition(index: number): THREE.Vector3 {
     const [x, y, z] = AUDIENCE_SLOTS[index % AUDIENCE_SLOTS.length];
@@ -258,7 +236,7 @@ export class Stage {
       this.splat(target);
       return;
     }
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 12), this.tomatoMaterial);
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 14), this.tomatoMaterial);
     mesh.castShadow = true;
     const from = thrower
       ? this.headPosition(thrower)
@@ -338,16 +316,20 @@ export class Stage {
       this.world.rotation.y += (this.pointerX - this.world.rotation.y) * Math.min(1, delta * 5);
       this.world.rotation.x += (this.pointerY - this.world.rotation.x) * Math.min(1, delta * 5);
     }
-    // Name labels would fill the screen in a close portrait, so they hide for that shot.
+    // Name labels would fill the screen in a close portrait, and the framed performer's name
+    // is already shown as the heading, so those labels hide.
     const showLabels = this.shot !== "portrait" || this.reducedMotion;
     this.castOrder.forEach((id, index) => {
       const character = this.characters.get(id);
       if (!character) return;
-      if (character.label) character.label.visible = showLabels;
+      if (character.label)
+        character.label.visible =
+          showLabels && !(this.shot === "medium" && id === this.focusId && !this.reducedMotion);
       this.animateCharacter(character, index, delta);
     });
     this.animateTomatoes();
     this.animateEmotes();
+    this.wallLogo.visible = this.showWallLogo;
     this.moveCamera(delta);
     this.renderer.render(this.scene, this.camera);
   }
@@ -435,12 +417,60 @@ export class Stage {
       return;
     }
     character.body.rotation.y = 0;
+    if (isTalking && !this.reducedMotion) {
+      this.perform(character, index, delta);
+      return;
+    }
+    character.body.rotation.x = 0;
+    character.body.rotation.z = 0;
     character.body.position.y = this.reducedMotion ? 0 : Math.sin(this.time * 2 + index) * 0.02;
+    // While someone sings, the audience claps in bursts, each person at a different moment.
+    const isClapping =
+      Boolean(this.talkingId) &&
+      !isWalking &&
+      !this.reducedMotion &&
+      Math.sin(this.time * 0.9 + index * 1.7) > 0.55;
+    const clap = Math.sin(this.time * 14) * 0.25;
     const armSwing = -legSwing * 0.8;
-    // A talking performer gestures with the arm away from the mic.
-    const gesture = isTalking ? -this.level * 1.4 : 0;
-    character.leftArm.rotation.set(armSwing, 0, 0);
-    character.rightArm.rotation.set(-armSwing + gesture, 0, 0);
+    this.easeArms(
+      character,
+      isClapping
+        ? { leftX: -1, leftZ: 0.45 + clap, rightX: -1, rightZ: -0.45 - clap }
+        : { leftX: armSwing, leftZ: 0, rightX: -armSwing, rightZ: 0 },
+      delta,
+    );
+  }
+
+  // A singing performer cycles through stage moves; a louder voice makes bigger moves.
+  private perform(character: Character, index: number, delta: number): void {
+    const move =
+      PERFORMANCE_MOVES[Math.floor(this.time / MOVE_SECONDS + index) % PERFORMANCE_MOVES.length];
+    const energy = 0.55 + Math.min(1, this.level * 1.8) * 0.45;
+    this.easeArms(
+      character,
+      {
+        leftX: move.leftX * energy,
+        leftZ: move.leftZ * energy,
+        rightX: move.rightX * energy,
+        rightZ: move.rightZ * energy,
+      },
+      delta,
+    );
+    character.body.rotation.z = Math.sin(this.time * 3) * move.sway;
+    character.body.rotation.x = Math.sin(this.time * 5) * 0.05 * this.level;
+    character.body.position.y = Math.abs(Math.sin(this.time * 6)) * move.bounce * (0.5 + this.level);
+  }
+
+  // Arms ease toward each pose, so switching moves never snaps.
+  private easeArms(character: Character, pose: ArmPose, delta: number): void {
+    const ease = 1 - Math.exp(-delta * 14);
+    const { leftArm, rightArm } = character;
+    leftArm.rotation.y = 0;
+    rightArm.rotation.y = 0;
+    leftArm.rotation.x += (pose.leftX - leftArm.rotation.x) * ease;
+    leftArm.rotation.z += (pose.leftZ - leftArm.rotation.z) * ease;
+    rightArm.rotation.x += (pose.rightX - rightArm.rotation.x) * ease;
+    rightArm.rotation.z += (pose.rightZ - rightArm.rotation.z) * ease;
   }
 
   private animateTomatoes(): void {
@@ -448,7 +478,10 @@ export class Stage {
       const target = this.characters.get(tomato.targetId);
       const progress = (this.time - tomato.startedAt) / TOMATO_FLIGHT_SECONDS;
       if (!target || progress >= 1) {
-        if (target) this.splat(target);
+        if (target) {
+          this.splat(target);
+          this.onTomatoHit?.();
+        }
         this.world.remove(tomato.mesh);
         tomato.mesh.geometry.dispose();
         this.tomatoes.splice(this.tomatoes.indexOf(tomato), 1);

@@ -193,6 +193,26 @@ export class AudioManager {
     oscillator.stop(startsAt + 0.12);
   }
 
+  /** A short wet "splat" for a tomato landing: fading noise through a low-pass filter. */
+  public splat(): void {
+    if (!this.context) return;
+    const context = this.context;
+    const length = Math.floor(context.sampleRate * 0.18);
+    const noise = context.createBuffer(1, length, context.sampleRate);
+    const samples = noise.getChannelData(0);
+    for (let index = 0; index < length; index++)
+      samples[index] = (Math.random() * 2 - 1) * (1 - index / length) ** 3;
+    const source = context.createBufferSource();
+    source.buffer = noise;
+    const filter = context.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 900;
+    const gain = context.createGain();
+    gain.gain.value = 0.5 * this.volume;
+    source.connect(filter).connect(gain).connect(context.destination);
+    source.start();
+  }
+
   public stopPlayback(): void {
     try {
       this.playback?.stop();

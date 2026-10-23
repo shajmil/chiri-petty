@@ -30,8 +30,8 @@ const libraryClips = libraryJson as LibraryClip[];
 const mimicryLines: MimicryLine[] = mimicryJson;
 
 export const BRAND = {
-  name: "Chiri Party",
-  malayalam: "ചിരി പാർട്ടി",
+  name: "Chiri Petty",
+  malayalam: "ചിരി പെട്ടി",
   tagline: "ഒന്ന് അനുകരിക്കൂ. പിന്നെ ചിരിക്കൂ.",
 };
 
@@ -179,7 +179,7 @@ for (const line of mimicryLines) {
     instruction: `“${line.meaning}” · ${line.delivery}`,
     reference: `/audio/mimicry/${line.id}.wav`,
     duration: line.duration,
-    license: "Original Chiri Party performance, recorded for this game.",
+    license: `Original ${BRAND.name} performance, recorded for this game.`,
     referenceKind: "recorded",
   });
 }

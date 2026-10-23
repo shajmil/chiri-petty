@@ -142,6 +142,7 @@ export default function Party() {
     isRound: false,
     focusId: "",
     shot: "wide",
+    showWallLogo: false,
   };
   const roomScene: StageScene = {
     actors: connectedPlayers.map((player) => ({
@@ -171,6 +172,7 @@ export default function Party() {
     events: room?.stageEvents ?? [],
     clock: () => game?.now ?? Date.now(),
     isRound: isInMatch,
+    showWallLogo: true,
     focusId:
       room?.phase === "RECORDING"
         ? (game?.playerId ?? "")
@@ -342,7 +344,7 @@ export default function Party() {
             event.preventDefault();
             if (room) void leave();
           }}
-          aria-label="Chiri Party home"
+          aria-label={`${BRAND.name} home`}
         >
           <SmileMark />
           <span>
@@ -711,7 +713,7 @@ export default function Party() {
                       const winner = [...room.players].sort(
                         (first, second) => second.total - first.total,
                       )[0];
-                      const summary = `${winner.name} won Chiri Party with ${winner.total} points after ${room.settings.rounds} rounds!`;
+                      const summary = `${winner.name} won ${BRAND.name} with ${winner.total} points after ${room.settings.rounds} rounds!`;
                       try {
                         await navigator.clipboard.writeText(summary);
                         setToast("Results copied. Brag responsibly.");

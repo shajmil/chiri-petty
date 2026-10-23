@@ -2229,3 +2229,49 @@ input[type="checkbox"] {
     font-size: 13px;
   }
 }
+
+/* Tomato stands out whenever someone else is performing. */
+.reaction-button.tomato {
+  border-color: #ff7a59;
+  box-shadow: 0 0 0 0 #ff7a5980;
+  animation: tomato-ready 1.4s ease-out infinite;
+}
+@keyframes tomato-ready {
+  from {
+    box-shadow: 0 0 0 0 #ff7a5999;
+  }
+  to {
+    box-shadow: 0 0 0 10px #ff7a5900;
+  }
+}
+/* A soft vignette darkens the stage edges like a lit theatre. */
+.stage-view::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 55%, #0000006b 100%);
+}
+@media (max-width: 899px) {
+  /* Icon-only reactions on phones so the whole bar fits on one line. */
+  .match-view .reaction-label {
+    display: none;
+  }
+  .match-view .round-controls .reaction-bar {
+    gap: 5px;
+    padding: 6px 8px;
+  }
+  .match-view .reaction-button,
+  .match-view .reaction-button.wide {
+    min-width: 38px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    font-size: 17px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .reaction-button.tomato {
+    animation: none;
+  }
+}

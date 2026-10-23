@@ -8,6 +8,7 @@ import {
   CUSTOM_CLIP_MAX_SECONDS,
   CUSTOM_CLIP_MIN_SECONDS,
 } from "../game/rules";
+import { BRAND } from "../game/prompts";
 import type { RoomState } from "../game/types";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
@@ -225,7 +226,7 @@ export default function CustomClips({
         </div>
       )}
       <p className="scoring-note">
-        Clips are not part of Chiri Party. They are uploaded to this private
+        Clips are not part of {BRAND.name}. They are uploaded to this private
         room only and deleted when the room expires after 24 hours.
       </p>
     </section>

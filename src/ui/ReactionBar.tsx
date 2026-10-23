@@ -27,6 +27,25 @@ export default function ReactionBar({
 
   return (
     <div className="reaction-bar" role="group" aria-label="Stage reactions">
+      {/* Tomato goes first so it is never scrolled out of view on a phone. */}
+      {canThrowTomato && (
+        <button
+          className="reaction-button wide tomato"
+          aria-label="Tomato"
+          title="Throw a tomato"
+          onClick={() => void game.command({ type: "tomato" })}
+        >
+          🍅<span className="reaction-label"> Tomato</span>
+        </button>
+      )}
+      <button
+        className="reaction-button wide"
+        aria-label="Dance"
+        title="Dance"
+        onClick={() => void game.command({ type: "dance" })}
+      >
+        💃<span className="reaction-label"> Dance</span>
+      </button>
       {EMOTES.map((emote) => (
         <button
           key={emote}
@@ -38,20 +57,6 @@ export default function ReactionBar({
           {emote}
         </button>
       ))}
-      <button
-        className="reaction-button wide"
-        onClick={() => void game.command({ type: "dance" })}
-      >
-        💃 Dance
-      </button>
-      {canThrowTomato && (
-        <button
-          className="reaction-button wide tomato"
-          onClick={() => void game.command({ type: "tomato" })}
-        >
-          🍅 Tomato
-        </button>
-      )}
     </div>
   );
 }

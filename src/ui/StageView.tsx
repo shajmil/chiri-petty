@@ -19,6 +19,8 @@ export interface StageScene {
   /** Which character the camera frames, and how closely. */
   focusId: string;
   shot: CameraShot;
+  /** The home page has its own big title, so it hides the graffiti logo on the wall. */
+  showWallLogo: boolean;
 }
 
 export default function StageView({
@@ -45,6 +47,7 @@ export default function StageView({
         if (cancelled || !canvas.current) return;
         try {
           stage.current = new Stage(canvas.current);
+          stage.current.onTomatoHit = () => audio.splat();
         } catch {
           setFailed(true);
         }
@@ -62,6 +65,7 @@ export default function StageView({
       if (!stage.current) return;
       const current = latestScene.current;
       stage.current.setRoundFraming(current.isRound);
+      stage.current.showWallLogo = current.showWallLogo;
       stage.current.focusId = current.focusId;
       stage.current.shot = current.shot;
       stage.current.setCast(current.actors);
