@@ -16,9 +16,13 @@ export interface StageScene {
   clock: () => number;
   /** True during rounds, when text overlays the top of the stage. */
   isRound: boolean;
-  /** Which character the camera frames, and how closely. */
+  /** Which character the portrait shot frames. */
   focusId: string;
   shot: CameraShot;
+  /** Identifies the current performance, so every screen picks the same entrance for it. */
+  performanceKey: string;
+  /** The round winner, who celebrates at the mic while the scores show. */
+  celebrationId: string;
   /** The home page has its own big title, so it hides the graffiti logo on the wall. */
   showWallLogo: boolean;
 }
@@ -47,7 +51,7 @@ export default function StageView({
         if (cancelled || !canvas.current) return;
         try {
           stage.current = new Stage(canvas.current);
-          stage.current.onTomatoHit = () => audio.splat();
+          stage.current.onTomatoSplat = () => audio.splat();
         } catch {
           setFailed(true);
         }
@@ -67,9 +71,11 @@ export default function StageView({
       stage.current.setRoundFraming(current.isRound);
       stage.current.showWallLogo = current.showWallLogo;
       stage.current.focusId = current.focusId;
-      stage.current.shot = current.shot;
+      stage.current.setShot(current.shot);
       stage.current.setCast(current.actors);
       stage.current.performerId = current.performerId;
+      stage.current.performanceKey = current.performanceKey;
+      stage.current.celebrationId = current.celebrationId;
       stage.current.talkingId = current.talkingId;
       stage.current.chorus = current.chorus;
       stage.current.reducedMotion = latestReducedMotion.current;

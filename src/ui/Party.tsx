@@ -140,6 +140,8 @@ export default function Party() {
     isRound: false,
     focusId: "",
     shot: "wide",
+    performanceKey: "",
+    celebrationId: "",
     showWallLogo: false,
   };
   const roomScene: StageScene = {
@@ -171,16 +173,16 @@ export default function Party() {
     clock: () => game?.now ?? Date.now(),
     isRound: isInMatch,
     showWallLogo: true,
-    focusId:
-      room?.phase === "RECORDING"
-        ? (game?.playerId ?? "")
-        : (currentTake?.playerId ?? ""),
-    shot:
-      room?.phase === "RECORDING"
-        ? "portrait"
-        : room?.phase === "PLAYBACK" && currentTake
-          ? "medium"
-          : "wide",
+    // Only your own recording gets the close-up; performances play back on the wide stage.
+    focusId: room?.phase === "RECORDING" ? (game?.playerId ?? "") : "",
+    shot: room?.phase === "RECORDING" ? "portrait" : "wide",
+    performanceKey:
+      room?.phase === "PLAYBACK" && currentTake
+        ? `${room.roundId}:${room.playbackIndex}`
+        : room?.phase === "RECORDING"
+          ? `${room.roundId}:${game?.playerId}`
+          : "",
+    celebrationId: room?.phase === "SCORING" ? roundWinnerId(room) : "",
   };
 
   async function connect(join: boolean) {

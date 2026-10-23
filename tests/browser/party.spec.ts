@@ -295,8 +295,11 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
 
   await expect(friend.locator(".playback-screen h2")).toHaveText("Anu", { timeout: 40000 });
   await expect(friend.locator(".performance-status")).toContainText("Performing", { timeout: 5000 });
-  await expect(page.getByRole("button", { name: "Tomato" })).toHaveCount(0);
-  await friend.getByRole("button", { name: "Tomato" }).click();
+  // About three tomatoes in ten are dodged and don't count, so keep throwing until one lands.
+  await expect(async () => {
+    await friend.getByRole("button", { name: "Tomato" }).click();
+    await expect(friend.locator(".crowd-count")).toContainText("🍅 1", { timeout: 700 });
+  }).toPass({ timeout: 6000 });
   await friend.waitForTimeout(700);
   await friend.getByRole("button", { name: "Send Laugh emote" }).click();
   await expect(page.locator(".crowd-count")).toContainText("😂 1 · 🍅 1");
@@ -308,7 +311,7 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
 
   await expect(page.locator(".playback-screen h2")).toHaveText("Manu", { timeout: 10000 });
   await expect(page.getByRole("button", { name: "Tomato" })).toBeVisible();
-  await expect(friend.getByRole("button", { name: "Tomato" })).toHaveCount(0);
+  await expect(friend.getByRole("button", { name: "Tomato" })).toBeVisible();
 
   await expect(page.locator(".phase-label")).toHaveText("The scores are in", { timeout: 30000 });
   await expect(page.locator(".phase-label")).toHaveText("Catch your breath", { timeout: 10000 });

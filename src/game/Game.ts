@@ -388,13 +388,14 @@ export class Game {
           this.startPerformance();
         } else {
           awardRound(room);
-          this.setPhase("SCORING", 6);
+          // Short and lively: the round winner celebrates at the mic while scores show.
+          this.setPhase("SCORING", 4);
         }
         break;
       case "SCORING":
         this.setPhase(
           room.round >= room.settings.rounds ? "FINISHED" : "NEXT_ROUND",
-          3,
+          1.5,
         );
         break;
       case "NEXT_ROUND":

@@ -20,10 +20,10 @@ export default function ReactionBar({
   game: Game;
   room: RoomState;
 }) {
-  const performance =
-    room.phase === "PLAYBACK" ? room.submissions[room.playbackIndex] : undefined;
-  const canThrowTomato =
-    performance !== undefined && performance.playerId !== game.playerId;
+  // A tomato needs someone to hit: the performer, or any other player between performances.
+  const canThrowTomato = room.players.some(
+    (player) => player.connected && player.id !== game.playerId,
+  );
 
   return (
     <div className="reaction-bar" role="group" aria-label="Stage reactions">

@@ -207,6 +207,7 @@ export function addStageEvent(
   emote: string,
   eventId: string,
   now: number,
+  pickRandom = (limit: number) => Math.floor(Math.random() * limit),
 ): boolean {
   const player = room.players.find((entry) => entry.id === playerId);
   if (!player || !player.connected) return false;
@@ -219,10 +220,21 @@ export function addStageEvent(
     room.phase === "PLAYBACK" ? room.submissions[room.playbackIndex] : undefined;
   const isWatchingSomeoneElse =
     performance !== undefined && performance.playerId !== playerId;
-  if (kind === "tomato" && !isWatchingSomeoneElse) return false;
+  // Tomatoes fly at the current performer, or at a random other player when nobody else is on stage.
+  let tomatoTarget = "";
+  if (kind === "tomato") {
+    const others = room.players.filter(
+      (entry) => entry.connected && entry.id !== playerId,
+    );
+    if (performance && isWatchingSomeoneElse) tomatoTarget = performance.playerId;
+    else if (others.length) tomatoTarget = others[pickRandom(others.length)].id;
+    else return false;
+  }
+  // About three tomatoes in ten are dodged. A dodged tomato misses, so it never counts.
+  const dodged = kind === "tomato" && pickRandom(10) >= 7;
   // Only a watcher's first laugh and first tomato per performance count toward awards.
   const countsTowardAwards =
-    kind === "tomato" || (kind === "emote" && emote === LAUGH_EMOTE);
+    (kind === "tomato" && !dodged) || (kind === "emote" && emote === LAUGH_EMOTE);
   if (performance && isWatchingSomeoneElse && countsTowardAwards) {
     const reactionKey = `${kind}:${emote}:${playerId}`;
     if (!room.reactions.includes(reactionKey)) {
@@ -244,7 +256,8 @@ export function addStageEvent(
     playerId,
     kind,
     emote: kind === "emote" ? emote : "",
-    targetId: kind === "tomato" && performance ? performance.playerId : "",
+    targetId: tomatoTarget,
+    dodged,
     at: now,
   });
   if (room.stageEvents.length > STAGE_EVENT_LIMIT) room.stageEvents.shift();

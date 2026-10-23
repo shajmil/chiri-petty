@@ -168,13 +168,16 @@ test("stage reactions: emotes are validated and rate-limited per player", () => 
   assert.deepEqual(room.stageEvents.map((event) => event.kind), ["emote", "dance"]);
 });
 
-test("tomatoes hit only someone else's performance; first tomato and laugh count once", () => {
+test("tomatoes can fly any time; during a performance they hit the performer and count once", () => {
   const room = match();
-  assert.equal(addStageEvent(room, "friend", "tomato", "", "t0", 1000), false);
+  assert.equal(addStageEvent(room, "friend", "tomato", "", "t0", 1000, () => 0), true);
+  assert.equal(room.stageEvents.at(-1)?.targetId, "host");
   const take = performance(room);
-  assert.equal(addStageEvent(room, "host", "tomato", "", "t1", 2000), false);
-  assert.equal(addStageEvent(room, "friend", "tomato", "", "t2", 3000), true);
-  assert.equal(addStageEvent(room, "friend", "tomato", "", "t3", 4000), true);
+  assert.equal(addStageEvent(room, "host", "tomato", "", "t1", 2000, () => 0), true);
+  assert.equal(room.stageEvents.at(-1)?.targetId, "friend");
+  assert.equal(take.tomatoes, 0);
+  assert.equal(addStageEvent(room, "friend", "tomato", "", "t2", 3000, () => 0), true);
+  assert.equal(addStageEvent(room, "friend", "tomato", "", "t3", 4000, () => 0), true);
   assert.equal(room.stageEvents.at(-1)?.targetId, "host");
   assert.equal(take.tomatoes, 1);
   assert.equal(room.players[0].tomatoes, 1);
@@ -190,4 +193,21 @@ test("stage event history stays bounded", () => {
     addStageEvent(room, "friend", "dance", "", `d${index}`, index * 1000);
   assert.equal(room.stageEvents.length, STAGE_EVENT_LIMIT);
   assert.equal(room.stageEvents[0].id, "d10");
+});
+
+test("a dodged tomato misses and does not count", () => {
+  const room = match();
+  const take = performance(room);
+  assert.equal(addStageEvent(room, "friend", "tomato", "", "miss", 1000, () => 9), true);
+  assert.equal(room.stageEvents.at(-1)?.dodged, true);
+  assert.equal(take.tomatoes, 0);
+  assert.equal(addStageEvent(room, "friend", "tomato", "", "hit", 2000, () => 0), true);
+  assert.equal(room.stageEvents.at(-1)?.dodged, false);
+  assert.equal(take.tomatoes, 1);
+});
+
+test("a tomato needs someone else to hit", () => {
+  const room = match();
+  room.players[1].connected = false;
+  assert.equal(addStageEvent(room, "host", "tomato", "", "lonely", 1000), false);
 });

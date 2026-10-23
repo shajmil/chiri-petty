@@ -78,6 +78,8 @@ export interface StageEvent {
   kind: StageEventKind;
   emote: string;
   targetId: string;
+  /** The target ducked out of the way, so the tomato lands on the floor. */
+  dodged: boolean;
   at: number;
 }
 

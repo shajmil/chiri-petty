@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import type { StageEvent } from "../game/types";
 import { buildRoom } from "./Room";
+import { buildBurst, buildGuitar, buildTomato, type Burst } from "./Props";
 import {
   buildCharacter,
   CHARACTER_SCALE,
@@ -14,7 +15,7 @@ import {
   type StageActor,
 } from "./Character";
 
-export type CameraShot = "wide" | "portrait" | "medium";
+export type CameraShot = "wide" | "portrait";
 
 const MIC_SPOT = new THREE.Vector3(0, 0, 1.6);
 
@@ -39,6 +40,42 @@ const PERFORMANCE_MOVES: StageMove[] = [
   { leftX: -1.35, leftZ: -0.15, rightX: -0.2, rightZ: 0.25, sway: 0.14, bounce: 0.04 }, // sway
 ];
 const MOVE_SECONDS = 1.6;
+
+type PerformanceStyle = "mic" | "guitar" | "dance" | "surprise";
+// Plain singing is the most common; the others keep each performance a little unpredictable.
+const PERFORMANCE_STYLES: PerformanceStyle[] = ["mic", "mic", "guitar", "dance", "surprise"];
+
+type AudienceReaction =
+  | "watch"
+  | "clap"
+  | "shocked"
+  | "dance"
+  | "angry"
+  | "laugh"
+  | "cheer"
+  | "facepalm";
+const AUDIENCE_REACTIONS: AudienceReaction[] = [
+  "clap",
+  "clap",
+  "shocked",
+  "dance",
+  "angry",
+  "laugh",
+  "cheer",
+  "facepalm",
+  "watch",
+];
+const REACTION_EMOJI: Record<AudienceReaction, string> = {
+  watch: "",
+  clap: "👏",
+  shocked: "😱",
+  dance: "💃",
+  angry: "😡",
+  laugh: "😂",
+  cheer: "🙌",
+  facepalm: "🤦",
+};
+
 // The first four players stand on the floor; players five to eight stand on the back riser.
 const AUDIENCE_SLOTS = [
   [-2.0, 0, -0.9],
@@ -56,14 +93,30 @@ const LEG_SWING = 0.55;
 // One step covers the distance the feet travel at full swing, so feet never slide.
 const STEP_LENGTH = 2 * LEG_LENGTH * CHARACTER_SCALE * Math.sin(LEG_SWING);
 const DANCE_SECONDS = 3;
+const SURPRISE_SECONDS = 1.1;
 const TOMATO_FLIGHT_SECONDS = 0.75;
+const DODGE_SECONDS = 0.7;
+const BURST_SECONDS = 0.9;
+const FLOOR_SPLAT_SECONDS = 4;
 const EMOTE_SECONDS = 2.2;
 const MAX_SPLATS = 8;
 
 interface FlyingTomato {
-  mesh: THREE.Mesh;
+  tomato: THREE.Group;
   from: THREE.Vector3;
   targetId: string;
+  /** Where a dodged tomato lands; a tomato that hits follows the target's head instead. */
+  missLandsAt: THREE.Vector3 | null;
+  startedAt: number;
+}
+
+interface Dodge {
+  startedAt: number;
+  side: number;
+}
+
+interface FloorSplat {
+  mesh: THREE.Mesh;
   startedAt: number;
 }
 
@@ -82,8 +135,15 @@ export class Stage {
   private readonly materials: SharedMaterials;
   private readonly characters = new Map<string, Character>();
   private readonly tomatoes: FlyingTomato[] = [];
+  private readonly dodges = new Map<string, Dodge>();
+  private readonly bursts: Burst[] = [];
+  private readonly floorSplats: FloorSplat[] = [];
   private readonly emotes: FloatingEmote[] = [];
+  private readonly reactions = new Map<string, { reaction: AudienceReaction; until: number }>();
   private readonly tomatoMaterial: THREE.MeshStandardMaterial;
+  private readonly confettiMaterials: THREE.MeshStandardMaterial[];
+  private readonly guitar = buildGuitar();
+  private guitarOwnerId = "";
   private seenEventIds = new Set<string>();
   private castOrder: string[] = [];
   private lastTime = 0;
@@ -94,9 +154,19 @@ export class Stage {
   public performerId = "";
   public talkingId = "";
   public chorus = false;
-  /** Which character the camera frames, and how closely. */
+  /** Identifies the current performance, so every screen picks the same entrance for it. */
+  public performanceKey = "";
+  private styledKey = "";
+  private performanceStyle: PerformanceStyle = "mic";
+  private hasSurprised = false;
+  private surpriseStartedAt = -100;
+  /** The round winner, who dances at the mic while the scores show. */
+  public celebrationId = "";
+  private crownedId = "";
+  /** Which character the portrait shot frames. */
   public focusId = "";
-  public shot: CameraShot = "wide";
+  private shot: CameraShot = "wide";
+  private portraitStartedAt = 0;
   private readonly wideCamera = new THREE.Vector3();
   private readonly wideLook = new THREE.Vector3();
   private readonly cameraGoal = new THREE.Vector3();
@@ -106,7 +176,7 @@ export class Stage {
   private readonly wallLogo: THREE.Mesh;
   /** The home page shows its own big title, so it hides the wall logo. */
   public showWallLogo = true;
-  public onTomatoHit: (() => void) | null = null;
+  public onTomatoSplat: (() => void) | null = null;
   public reducedMotion = false;
   private isRoundFraming = false;
 
@@ -141,7 +211,10 @@ export class Stage {
       cream: this.material(0xffedc0),
       you: this.material(0xc6f24e),
     };
-    this.tomatoMaterial = this.material(0xc8281e);
+    this.tomatoMaterial = new THREE.MeshStandardMaterial({ color: 0xc8281e, roughness: 0.3 });
+    this.confettiMaterials = [0xffd23f, 0xff5d8f, 0x4ee6c2, 0xc6f24e].map((color) =>
+      this.material(color),
+    );
     this.wallLogo = buildRoom(
       this.scene,
       this.world,
@@ -177,6 +250,11 @@ export class Stage {
         changed?.look !== character.actor.look ||
         changed?.isYou !== character.actor.isYou;
       if (isOutdated) {
+        // The guitar is reused, so take it back before the character is thrown away.
+        if (id === this.guitarOwnerId) {
+          this.guitar.removeFromParent();
+          this.guitarOwnerId = "";
+        }
         this.world.remove(character.root);
         disposeObject(character.root, this.sharedMaterials());
         this.characters.delete(id);
@@ -198,6 +276,11 @@ export class Stage {
     this.resize();
   }
 
+  public setShot(shot: CameraShot): void {
+    if (shot === "portrait" && this.shot !== "portrait") this.portraitStartedAt = this.time;
+    this.shot = shot;
+  }
+
   public showEvents(events: StageEvent[], now: number): void {
     for (const event of events) {
       if (this.seenEventIds.has(event.id)) continue;
@@ -205,7 +288,7 @@ export class Stage {
       if (now - event.at > 3000) continue;
       if (event.kind === "dance") this.startDance(event.playerId);
       if (event.kind === "emote") this.showEmote(event.playerId, event.emote);
-      if (event.kind === "tomato") this.throwTomato(event.playerId, event.targetId);
+      if (event.kind === "tomato") this.throwTomato(event);
     }
     this.seenEventIds = new Set(events.map((event) => event.id));
   }
@@ -215,9 +298,10 @@ export class Stage {
     if (character) character.danceStartedAt = this.time;
   }
 
-  private showEmote(playerId: string, emote: string): void {
+  private showEmote(playerId: string, emote: string, size = 0.9): void {
     if (!this.characters.has(playerId)) return;
     const sprite = emojiSprite(emote);
+    sprite.scale.setScalar(size);
     this.world.add(sprite);
     this.emotes.push({ sprite, characterId: playerId, startedAt: this.time });
   }
@@ -228,22 +312,32 @@ export class Stage {
       .add(new THREE.Vector3(0, (HEAD_HEIGHT + character.body.position.y) * CHARACTER_SCALE, 0));
   }
 
-  private throwTomato(throwerId: string, targetId: string): void {
-    const thrower = this.characters.get(throwerId);
-    const target = this.characters.get(targetId);
+  private throwTomato(event: StageEvent): void {
+    const thrower = this.characters.get(event.playerId);
+    const target = this.characters.get(event.targetId);
     if (!target) return;
     if (this.reducedMotion) {
-      this.splat(target);
+      if (!event.dodged) this.splat(target);
       return;
     }
-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.26, 20, 14), this.tomatoMaterial);
-    mesh.castShadow = true;
     const from = thrower
       ? this.headPosition(thrower)
       : new THREE.Vector3((Math.random() - 0.5) * 6, 0.5, 6);
-    mesh.position.copy(from);
-    this.world.add(mesh);
-    this.tomatoes.push({ mesh, from, targetId, startedAt: this.time });
+    let missLandsAt: THREE.Vector3 | null = null;
+    if (event.dodged) {
+      // The tomato sails through where the head was and lands on the floor behind.
+      const head = this.headPosition(target);
+      const onward = head.clone().sub(from).setY(0).normalize().multiplyScalar(2.2);
+      missLandsAt = new THREE.Vector3(head.x + onward.x, target.root.position.y, head.z + onward.z);
+      this.dodges.set(event.targetId, {
+        startedAt: this.time + TOMATO_FLIGHT_SECONDS * 0.35,
+        side: Math.random() < 0.5 ? -1 : 1,
+      });
+    }
+    const tomato = buildTomato();
+    tomato.position.copy(from);
+    this.world.add(tomato);
+    this.tomatoes.push({ tomato, from, targetId: event.targetId, missLandsAt, startedAt: this.time });
   }
 
   private splat(target: Character): void {
@@ -256,6 +350,13 @@ export class Stage {
     mesh.scale.set(1, 0.8, 0.25);
     const surfaceNormal = new THREE.Vector3(x, y, z).normalize();
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), surfaceNormal);
+    // A few smaller blobs around the edge make it look splattered rather than stuck on.
+    for (let index = 0; index < 3; index++) {
+      const blob = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), this.tomatoMaterial);
+      const angle = (index / 3) * Math.PI * 2 + Math.random();
+      blob.position.set(Math.cos(angle) * 0.28, Math.sin(angle) * 0.3, 0);
+      mesh.add(blob);
+    }
     target.body.add(mesh);
     target.splats.push(mesh);
   }
@@ -263,13 +364,24 @@ export class Stage {
   private clearSplats(character: Character): void {
     for (const mesh of character.splats) {
       character.body.remove(mesh);
-      mesh.geometry.dispose();
+      disposeObject(mesh, this.sharedMaterials());
     }
     character.splats = [];
   }
 
+  private burst(at: THREE.Vector3, materials: THREE.Material[]): void {
+    if (this.reducedMotion) return;
+    const burst = buildBurst(at, materials, this.time);
+    this.world.add(...burst.pieces);
+    this.bursts.push(burst);
+  }
+
   private sharedMaterials(): Set<THREE.Material> {
-    return new Set([...Object.values(this.materials), this.tomatoMaterial]);
+    return new Set([
+      ...Object.values(this.materials),
+      this.tomatoMaterial,
+      ...this.confettiMaterials,
+    ]);
   }
 
   private readonly onPointer = (event: PointerEvent): void => {
@@ -316,22 +428,45 @@ export class Stage {
       this.world.rotation.y += (this.pointerX - this.world.rotation.y) * Math.min(1, delta * 5);
       this.world.rotation.x += (this.pointerY - this.world.rotation.x) * Math.min(1, delta * 5);
     }
-    // Name labels would fill the screen in a close portrait, and the framed performer's name
-    // is already shown as the heading, so those labels hide.
+    this.updatePerformanceStyle();
+    if (!this.celebrationId) this.crownedId = "";
+    // Clearing lets the crowd start its next round of reactions at staggered moments.
+    if (!this.talkingId && !this.celebrationId) this.reactions.clear();
+    // Name labels would fill the screen in a close portrait, so they hide.
     const showLabels = this.shot !== "portrait" || this.reducedMotion;
     this.castOrder.forEach((id, index) => {
       const character = this.characters.get(id);
       if (!character) return;
-      if (character.label)
-        character.label.visible =
-          showLabels && !(this.shot === "medium" && id === this.focusId && !this.reducedMotion);
+      if (character.label) character.label.visible = showLabels;
       this.animateCharacter(character, index, delta);
+      this.applyDodge(character);
     });
-    this.animateTomatoes();
+    this.animateTomatoes(delta);
+    this.animateBursts(delta);
+    this.animateFloorSplats();
     this.animateEmotes();
     this.wallLogo.visible = this.showWallLogo;
     this.moveCamera(delta);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private updatePerformanceStyle(): void {
+    if (this.performanceKey !== this.styledKey) {
+      this.styledKey = this.performanceKey;
+      this.performanceStyle =
+        this.performanceKey && !this.reducedMotion
+          ? PERFORMANCE_STYLES[hashText(this.performanceKey) % PERFORMANCE_STYLES.length]
+          : "mic";
+      this.hasSurprised = false;
+      this.surpriseStartedAt = -100;
+      // A dance entrance means dancing all the way to the mic.
+      if (this.performanceStyle === "dance") this.startDance(this.performerId);
+    }
+    const guitarOwnerId = this.performanceStyle === "guitar" ? this.performerId : "";
+    if (guitarOwnerId === this.guitarOwnerId) return;
+    this.guitar.removeFromParent();
+    this.characters.get(guitarOwnerId)?.body.add(this.guitar);
+    this.guitarOwnerId = guitarOwnerId;
   }
 
   private moveCamera(delta: number): void {
@@ -340,21 +475,7 @@ export class Stage {
       this.cameraGoal.copy(this.wideCamera);
       this.lookGoal.copy(this.wideLook);
     } else {
-      const isPortrait = this.shot === "portrait";
-      const tanHalfFov = Math.tan((this.camera.fov * Math.PI) / 360);
-      // A portrait frames the face with the mic head beside it; a medium shot frames the whole performer.
-      const subject = focus.root.position.clone();
-      subject.x -= isPortrait ? 0.3 : 0.2;
-      subject.y += (isPortrait ? HEAD_HEIGHT : 1.9) * CHARACTER_SCALE;
-      const halfWidthNeeded = isPortrait ? 1.5 : 2.8;
-      const distance = Math.max(
-        isPortrait ? 3.8 : 6.5,
-        halfWidthNeeded / (tanHalfFov * this.camera.aspect),
-      );
-      // Text sits over the top of the stage, so keep the subject in the lower part of the frame.
-      const lift = distance * tanHalfFov * 0.42;
-      this.lookGoal.set(subject.x, subject.y + lift, subject.z);
-      this.cameraGoal.set(subject.x, subject.y + lift + 0.3, subject.z + distance);
+      this.framePortrait(focus);
     }
     // Exponential easing: quick to start, gentle to settle, and the same speed at any frame rate.
     const ease = this.reducedMotion ? 1 : 1 - Math.exp(-delta * 4.5);
@@ -363,8 +484,23 @@ export class Stage {
     this.camera.lookAt(this.currentLook);
   }
 
+  // A three-quarter close-up of the face with the mic head beside it, slowly pushing in like a film shot.
+  private framePortrait(focus: Character): void {
+    const tanHalfFov = Math.tan((this.camera.fov * Math.PI) / 360);
+    const face = focus.root.position.clone();
+    face.x -= 0.35;
+    face.y += HEAD_HEIGHT * CHARACTER_SCALE;
+    const pushIn = 1 - 0.15 * Math.min(1, (this.time - this.portraitStartedAt) / 6);
+    const distance = Math.max(5.2, 2.0 / (tanHalfFov * this.camera.aspect)) * pushIn;
+    // Text sits over the top of the stage, so keep the face in the lower part of the frame.
+    const lift = distance * tanHalfFov * 0.32;
+    this.lookGoal.set(face.x, face.y + lift, face.z);
+    this.cameraGoal.set(face.x + distance * 0.3, face.y + lift + 0.4, face.z + distance);
+  }
+
   private animateCharacter(character: Character, index: number, delta: number): void {
-    const isPerformer = character.actor.id === this.performerId;
+    const id = character.actor.id;
+    const isPerformer = id === this.performerId;
     const target = isPerformer ? MIC_SPOT : this.slotPosition(index);
     const position = character.root.position;
     const toTarget = new THREE.Vector3(target.x - position.x, 0, target.z - position.z);
@@ -394,13 +530,15 @@ export class Stage {
 
     if (!isPerformer && distance < 0.1 && character.splats.length) this.clearSplats(character);
 
-    const isTalking = character.actor.id === this.talkingId && distance < 0.2;
+    const isAtMic = isPerformer && distance < 0.2;
+    const isTalking = id === this.talkingId && distance < 0.2;
     const mouthOpen = isTalking
       ? 0.3 + this.level * 2 + Math.abs(Math.sin(this.time * 8)) * this.level
       : this.chorus
         ? 0.3 + Math.abs(Math.sin(this.time * 7 + index)) * 0.5
         : 0.3;
     character.mouth.scale.y = this.reducedMotion ? Math.min(mouthOpen, 0.8) : mouthOpen;
+    if (isAtMic) this.arriveAtMic(character);
 
     const danceProgress = (this.time - character.danceStartedAt) / DANCE_SECONDS;
     const isDancing = danceProgress >= 0 && danceProgress < 1;
@@ -417,28 +555,44 @@ export class Stage {
       return;
     }
     character.body.rotation.y = 0;
-    if (isTalking && !this.reducedMotion) {
-      this.perform(character, index, delta);
-      return;
-    }
     character.body.rotation.x = 0;
     character.body.rotation.z = 0;
     character.body.position.y = this.reducedMotion ? 0 : Math.sin(this.time * 2 + index) * 0.02;
-    // While someone sings, the audience claps in bursts, each person at a different moment.
-    const isClapping =
-      Boolean(this.talkingId) &&
-      !isWalking &&
-      !this.reducedMotion &&
-      Math.sin(this.time * 0.9 + index * 1.7) > 0.55;
-    const clap = Math.sin(this.time * 14) * 0.25;
+
     const armSwing = -legSwing * 0.8;
-    this.easeArms(
-      character,
-      isClapping
-        ? { leftX: -1, leftZ: 0.45 + clap, rightX: -1, rightZ: -0.45 - clap }
-        : { leftX: armSwing, leftZ: 0, rightX: -armSwing, rightZ: 0 },
-      delta,
-    );
+    const walkingArms = { leftX: armSwing, leftZ: 0, rightX: -armSwing, rightZ: 0 };
+    const surpriseProgress = (this.time - this.surpriseStartedAt) / SURPRISE_SECONDS;
+    if (this.reducedMotion) {
+      this.easeArms(character, walkingArms, delta);
+    } else if (isPerformer && surpriseProgress >= 0 && surpriseProgress < 1) {
+      this.surprise(character, surpriseProgress, delta);
+    } else if (id === this.celebrationId && isAtMic) {
+      this.celebrate(character, delta);
+    } else if (id === this.guitarOwnerId) {
+      this.playGuitar(character, isTalking, delta);
+    } else if (isTalking) {
+      this.perform(character, index, delta);
+    } else if ((this.talkingId || this.celebrationId) && !isWalking && !isPerformer) {
+      this.react(character, this.nextReaction(character), index, delta);
+    } else {
+      this.easeArms(character, walkingArms, delta);
+    }
+  }
+
+  // Special entrances and the winner's crown start once the character reaches the mic.
+  private arriveAtMic(character: Character): void {
+    const id = character.actor.id;
+    if (this.performanceStyle === "surprise" && !this.hasSurprised) {
+      this.hasSurprised = true;
+      this.surpriseStartedAt = this.time;
+      this.showEmote(id, "🎉");
+      this.burst(this.headPosition(character), this.confettiMaterials);
+    }
+    if (id === this.celebrationId && this.crownedId !== id) {
+      this.crownedId = id;
+      this.showEmote(id, "👑");
+      this.burst(this.headPosition(character), this.confettiMaterials);
+    }
   }
 
   // A singing performer cycles through stage moves; a louder voice makes bigger moves.
@@ -461,6 +615,85 @@ export class Stage {
     character.body.position.y = Math.abs(Math.sin(this.time * 6)) * move.bounce * (0.5 + this.level);
   }
 
+  // One hand strums the guitar body while the other holds the neck; a louder voice strums harder.
+  private playGuitar(character: Character, isStrumming: boolean, delta: number): void {
+    const strum = isStrumming ? Math.sin(this.time * 16) * (0.15 + this.level * 0.4) : 0;
+    this.easeArms(character, { leftX: -0.7 + strum, leftZ: 0.55, rightX: -1.25, rightZ: 0.2 }, delta);
+    if (!isStrumming) return;
+    character.body.rotation.z = Math.sin(this.time * 4) * 0.06;
+    character.body.position.y = Math.abs(Math.sin(this.time * 8)) * 0.05;
+  }
+
+  // A "ta-da!" spin jump with arms flung up.
+  private surprise(character: Character, progress: number, delta: number): void {
+    character.body.position.y = Math.sin(progress * Math.PI) * 0.9;
+    character.body.rotation.y = progress * Math.PI * 2;
+    character.mouth.scale.y = 1.1;
+    this.easeArms(character, { leftX: 0, leftZ: -2.7, rightX: 0, rightZ: 2.7 }, delta);
+  }
+
+  private celebrate(character: Character, delta: number): void {
+    const beat = this.time * 8;
+    const pump = Math.sin(beat) * 0.35;
+    character.body.position.y = Math.abs(Math.sin(beat)) * 0.3;
+    character.body.rotation.y = Math.sin(this.time * 2.5) * 0.6;
+    character.mouth.scale.y = 0.9;
+    this.easeArms(character, { leftX: 0, leftZ: -2.6 + pump, rightX: 0, rightZ: 2.6 + pump }, delta);
+  }
+
+  // Each audience member switches to a new random reaction every few seconds, at their own moments.
+  private nextReaction(character: Character): AudienceReaction {
+    const id = character.actor.id;
+    const current = this.reactions.get(id);
+    if (!current) {
+      this.reactions.set(id, { reaction: "watch", until: this.time + Math.random() * 1.5 });
+      return "watch";
+    }
+    if (this.time < current.until) return current.reaction;
+    const reaction = AUDIENCE_REACTIONS[Math.floor(Math.random() * AUDIENCE_REACTIONS.length)];
+    this.reactions.set(id, { reaction, until: this.time + 2 + Math.random() * 2 });
+    // Bubbles only during rounds, so the lobby and home stage stay calm.
+    if (this.isRoundFraming && reaction !== "watch" && Math.random() < 0.45)
+      this.showEmote(id, REACTION_EMOJI[reaction], 0.65);
+    return reaction;
+  }
+
+  private react(character: Character, reaction: AudienceReaction, index: number, delta: number): void {
+    const body = character.body;
+    const beat = this.time * 9 + index;
+    if (reaction === "clap") {
+      const clap = Math.sin(this.time * 14) * 0.25;
+      this.easeArms(character, { leftX: -1, leftZ: 0.45 + clap, rightX: -1, rightZ: -0.45 - clap }, delta);
+    } else if (reaction === "shocked") {
+      body.rotation.x = -0.15;
+      character.mouth.scale.y = 1.2;
+      this.easeArms(character, { leftX: -2.35, leftZ: 0.55, rightX: -2.35, rightZ: -0.55 }, delta);
+    } else if (reaction === "dance") {
+      body.position.y = Math.abs(Math.sin(beat)) * 0.25;
+      body.rotation.z = Math.sin(beat / 2) * 0.15;
+      const wave = Math.sin(beat) * 0.4;
+      this.easeArms(character, { leftX: 0, leftZ: -2.4 - wave, rightX: 0, rightZ: 2.4 - wave }, delta);
+    } else if (reaction === "angry") {
+      const shake = Math.sin(this.time * 20) * 0.25;
+      body.rotation.x = 0.12;
+      this.easeArms(character, { leftX: -0.2, leftZ: -0.5, rightX: -2.7 + shake, rightZ: 0.2 }, delta);
+    } else if (reaction === "laugh") {
+      const giggle = Math.abs(Math.sin(this.time * 12));
+      body.rotation.x = -0.1 + giggle * 0.12;
+      character.mouth.scale.y = 0.7 + giggle * 0.5;
+      this.easeArms(character, { leftX: -0.7, leftZ: 0.5, rightX: -0.7, rightZ: -0.5 }, delta);
+    } else if (reaction === "cheer") {
+      const pump = Math.sin(this.time * 10) * 0.3;
+      body.position.y = Math.max(0, Math.sin(this.time * 10)) * 0.2;
+      this.easeArms(character, { leftX: -0.3, leftZ: -2.6 + pump, rightX: -0.3, rightZ: 2.6 - pump }, delta);
+    } else if (reaction === "facepalm") {
+      body.rotation.x = 0.18;
+      this.easeArms(character, { leftX: -0.1, leftZ: 0, rightX: -2.35, rightZ: -0.55 }, delta);
+    } else {
+      this.easeArms(character, { leftX: 0, leftZ: 0, rightX: 0, rightZ: 0 }, delta);
+    }
+  }
+
   // Arms ease toward each pose, so switching moves never snaps.
   private easeArms(character: Character, pose: ArmPose, delta: number): void {
     const ease = 1 - Math.exp(-delta * 14);
@@ -473,24 +706,96 @@ export class Stage {
     rightArm.rotation.z += (pose.rightZ - rightArm.rotation.z) * ease;
   }
 
-  private animateTomatoes(): void {
-    for (const tomato of [...this.tomatoes]) {
-      const target = this.characters.get(tomato.targetId);
-      const progress = (this.time - tomato.startedAt) / TOMATO_FLIGHT_SECONDS;
+  // A dodging character hops sideways and leans away, then settles back.
+  private applyDodge(character: Character): void {
+    const dodge = this.dodges.get(character.actor.id);
+    const progress = dodge ? (this.time - dodge.startedAt) / DODGE_SECONDS : -1;
+    if (!dodge || progress < 0 || progress >= 1) {
+      character.body.position.x = 0;
+      if (progress >= 1) this.dodges.delete(character.actor.id);
+      return;
+    }
+    const amount = Math.sin(progress * Math.PI);
+    character.body.position.x = dodge.side * amount * 1.1;
+    character.body.position.y += amount * 0.25;
+    character.body.rotation.z = -dodge.side * amount * 0.35;
+  }
+
+  private animateTomatoes(delta: number): void {
+    for (const flying of [...this.tomatoes]) {
+      const target = this.characters.get(flying.targetId);
+      const progress = (this.time - flying.startedAt) / TOMATO_FLIGHT_SECONDS;
       if (!target || progress >= 1) {
-        if (target) {
-          this.splat(target);
-          this.onTomatoHit?.();
-        }
-        this.world.remove(tomato.mesh);
-        tomato.mesh.geometry.dispose();
-        this.tomatoes.splice(this.tomatoes.indexOf(tomato), 1);
+        if (target) this.landTomato(flying, target);
+        this.world.remove(flying.tomato);
+        disposeObject(flying.tomato, new Set());
+        this.tomatoes.splice(this.tomatoes.indexOf(flying), 1);
         continue;
       }
-      tomato.mesh.position
-        .lerpVectors(tomato.from, this.headPosition(target), progress)
+      const landing = flying.missLandsAt ?? this.headPosition(target);
+      flying.tomato.position
+        .lerpVectors(flying.from, landing, progress)
         .add(new THREE.Vector3(0, Math.sin(progress * Math.PI) * 1.6, 0));
-      tomato.mesh.rotation.x += 0.3;
+      flying.tomato.rotation.x += delta * 12;
+      flying.tomato.rotation.z += delta * 7;
+    }
+  }
+
+  private landTomato(flying: FlyingTomato, target: Character): void {
+    this.onTomatoSplat?.();
+    if (flying.missLandsAt) {
+      this.addFloorSplat(flying.missLandsAt);
+      this.burst(flying.missLandsAt, [this.tomatoMaterial]);
+      this.showEmote(flying.targetId, "😜", 0.65);
+      return;
+    }
+    this.splat(target);
+    this.burst(this.headPosition(target), [this.tomatoMaterial]);
+  }
+
+  private addFloorSplat(at: THREE.Vector3): void {
+    const mesh = new THREE.Mesh(
+      new THREE.CircleGeometry(0.3 + Math.random() * 0.15, 20),
+      this.tomatoMaterial,
+    );
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(at.x, at.y + 0.02, at.z);
+    this.world.add(mesh);
+    this.floorSplats.push({ mesh, startedAt: this.time });
+  }
+
+  // Floor splats shrink away in their last second.
+  private animateFloorSplats(): void {
+    for (const splat of [...this.floorSplats]) {
+      const timeLeft = FLOOR_SPLAT_SECONDS - (this.time - splat.startedAt);
+      if (timeLeft <= 0) {
+        this.world.remove(splat.mesh);
+        splat.mesh.geometry.dispose();
+        this.floorSplats.splice(this.floorSplats.indexOf(splat), 1);
+        continue;
+      }
+      splat.mesh.scale.setScalar(Math.min(1, timeLeft));
+    }
+  }
+
+  private animateBursts(delta: number): void {
+    for (const burst of [...this.bursts]) {
+      const age = this.time - burst.startedAt;
+      if (age >= BURST_SECONDS) {
+        for (const piece of burst.pieces) {
+          this.world.remove(piece);
+          piece.geometry.dispose();
+        }
+        this.bursts.splice(this.bursts.indexOf(burst), 1);
+        continue;
+      }
+      burst.pieces.forEach((piece, index) => {
+        const velocity = burst.velocities[index];
+        velocity.y -= 9.8 * delta;
+        piece.position.addScaledVector(velocity, delta);
+        piece.rotation.x += delta * 8;
+        piece.scale.setScalar(1 - age / BURST_SECONDS);
+      });
     }
   }
 
@@ -518,6 +823,7 @@ export class Stage {
     this.canvas.removeEventListener("pointermove", this.onPointer);
     this.canvas.removeEventListener("pointerleave", this.onLeave);
     disposeObject(this.scene, new Set());
+    disposeObject(this.guitar, new Set());
     this.renderer.dispose();
   }
 }
@@ -525,4 +831,11 @@ export class Stage {
 function turnToward(current: number, target: number, maxStep: number): number {
   const difference = Math.atan2(Math.sin(target - current), Math.cos(target - current));
   return current + Math.sign(difference) * Math.min(Math.abs(difference), maxStep);
+}
+
+// A small stable hash, so every screen turns the same text into the same number.
+function hashText(text: string): number {
+  let hash = 0;
+  for (const character of text) hash = (hash * 31 + character.charCodeAt(0)) | 0;
+  return Math.abs(hash);
 }
