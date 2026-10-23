@@ -890,19 +890,20 @@ export default function Party() {
                         )}
                       </div>
                     )}
-                    <ReactionBar game={game} room={room} />
-                    <VoiceShape
-                      audio={audio}
-                      progress={shapeProgress}
-                      isRecording={isRecordingLive}
-                    />
-                    <ReactionBar game={game} room={room} />
-                    <div className="phase-progress">
-                      <span
-                        style={{
-                          width: `${Math.min(100, (room.round / room.settings.rounds) * 100)}%`,
-                        }}
+                    <div className="round-controls">
+                      <VoiceShape
+                        audio={audio}
+                        progress={shapeProgress}
+                        isRecording={isRecordingLive}
                       />
+                      <ReactionBar game={game} room={room} />
+                      <div className="phase-progress">
+                        <span
+                          style={{
+                            width: `${Math.min(100, (room.round / room.settings.rounds) * 100)}%`,
+                          }}
+                        />
+                      </div>
                     </div>
                   </>
                 )}

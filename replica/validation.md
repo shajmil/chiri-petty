@@ -111,3 +111,6 @@ Executed: typecheck passed; unit tests 20/20. Laptop screenshots at 1366x768 wit
 - Practice dialog opens from the fixed home action and fits without scrolling at 1366?768 and 390?844. Screenshots: `.taste-skill/mic-1366.png`, `.taste-skill/mic-390.png`.
 - These checks do not establish perceived sound quality on physical microphones or remote-device Supabase behavior.
 - Quick mic check: synthetic recording completed; Hear my recording and Record again were available and playback was invoked. Result dialog measured 571px tall with no internal overflow at 1366×768.
+
+## Round layout regression fix — 2026-10-23
+Removed the duplicate ReactionBar and grouped the waveform, reactions and round progress into one footer. Only the footer receives automatic top spacing. Checked playback screenshots at 1440×900, 1107×1172 and 390×844. The browser regression checks exactly one reaction bar and a gap of at most 12px below the waveform.

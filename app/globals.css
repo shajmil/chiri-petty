@@ -1463,12 +1463,20 @@ input[type="checkbox"] {
   justify-content: center;
   margin: 12px 0;
 }
-.game-panel > .reaction-bar {
+.round-controls {
   margin-top: auto;
-  padding: 0 12px;
+  flex-shrink: 0;
+  background: #241d2a;
 }
-.reaction-bar + .voice-shape {
-  margin-top: 0;
+.round-controls .voice-shape {
+  margin: 0;
+}
+.round-controls .reaction-bar {
+  margin: 0;
+  padding: 8px 12px;
+}
+.round-controls .phase-progress {
+  margin: 0;
 }
 .lobby-content .reaction-bar {
   justify-content: flex-start;
@@ -1893,7 +1901,7 @@ input[type="checkbox"] {
     height: 100%;
   }
   .match-view .round-theatre {
-    bottom: 168px;
+    bottom: 148px;
   }
   .match-view .prompt-screen {
     min-height: 0;
@@ -1946,9 +1954,6 @@ input[type="checkbox"] {
   }
   .match-view .score-row > strong {
     font-size: 24px;
-  }
-  .match-view .game-panel > .reaction-bar {
-    margin: auto 0 8px;
   }
   .match-view .voice-shape {
     padding: 8px 14px;

@@ -77,6 +77,18 @@ test("complete two-player, two-round match using real browser recording and loca
     await expect(page.locator(".playback-screen")).toContainText(
       "Performance 1 of 2",
     );
+    if (round === 1) {
+      for (const viewport of [{ width: 1440, height: 900 }, { width: 1107, height: 1172 }, { width: 390, height: 844 }]) {
+        await page.setViewportSize(viewport);
+        await expect(page.locator(".game-panel .reaction-bar")).toHaveCount(1);
+        const waveform = await page.locator(".voice-shape").boundingBox();
+        const reactions = await page.locator(".game-panel .reaction-bar").boundingBox();
+        expect(reactions!.y - (waveform!.y + waveform!.height)).toBeGreaterThanOrEqual(-1);
+        expect(reactions!.y - (waveform!.y + waveform!.height)).toBeLessThanOrEqual(12);
+        await page.screenshot({ path: ".taste-skill/round-layout-" + viewport.width + ".png", fullPage: true });
+      }
+      await page.setViewportSize({ width: 1440, height: 1000 });
+    }
     await expect(page.locator(".phase-label")).toHaveText("The scores are in", {
       timeout: 30000,
     });
