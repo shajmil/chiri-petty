@@ -1,0 +1,2 @@
+[functions.cleanup-recordings]
+verify_jwt = false

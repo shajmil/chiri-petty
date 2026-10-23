@@ -1,0 +1,68 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
+import {
+  MIMICRY_LINES,
+  PACKS,
+  PLAYABLE_PACKS,
+  PROMPTS,
+  createDeck,
+} from "../src/game/prompts";
+import { AcousticScorer } from "../src/core/LocalAudioScorer";
+import library from "../src/game/library.json";
+
+const recordedMimicry = MIMICRY_LINES.filter((line) => line.duration !== null);
+
+test("every library clip is a short, normalized, traceable WAV", () => {
+  assert.equal(PROMPTS.length, library.filter(clip => clip.world !== "music").length + recordedMimicry.length);
+  assert.equal(PROMPTS.filter(clip => clip.category === "malayalam-movies").length, 10);
+  assert.ok(!PROMPTS.some(clip => clip.category === "music"));
+  assert.equal(new Set(library.map((clip) => clip.id)).size, library.length);
+  const scorer = new AcousticScorer();
+  for (const clip of library) {
+    const file = readFileSync(`public/audio/library/${clip.id}.wav`);
+    assert.equal(createHash("sha256").update(file).digest("hex"), clip.fileSha256, clip.id);
+    assert.ok(clip.source && clip.sourceUrl.startsWith("https://") && clip.license, clip.id);
+    assert.ok(PACKS.some((pack) => pack.id === clip.world), clip.id);
+    assert.ok(["easy", "normal", "hard"].includes(clip.difficulty), clip.id);
+    const rate = file.readUInt32LE(24);
+    const samples = Float32Array.from(
+      { length: (file.length - 44) / 2 },
+      (_, index) => file.readInt16LE(44 + index * 2) / 32768,
+    );
+    assert.ok(Math.abs(samples.length / rate - clip.duration) < 0.001, clip.id);
+    assert.ok(clip.duration <= 4.51, clip.id);
+    let peak = 0;
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+    assert.ok(peak > 0.1 && peak < 0.91, clip.id);
+    if (samples.length / rate >= 0.2) {
+      const world = clip.world as (typeof PROMPTS)[number]["category"];
+      assert.ok((scorer.compare(samples, samples, rate, world).overall ?? 0) >= 90, clip.id);
+    }
+  }
+  assert.ok(createDeck("mixed", 50).every((id) => PROMPTS.some((prompt) => prompt.id === id)));
+});
+
+test("only worlds with sounds are offered, plus full chaos and room clips", () => {
+  for (const pack of PLAYABLE_PACKS) {
+    if (pack.id === "mixed" || pack.id === "custom") continue;
+    assert.ok(PROMPTS.some((prompt) => prompt.category === pack.id), pack.id);
+  }
+  assert.equal(
+    PLAYABLE_PACKS.some((pack) => pack.id === "mimicry"),
+    recordedMimicry.length > 0,
+  );
+});
+
+test("mimicry script lines are unique, written in Malayalam and only playable with a recording", () => {
+  const ids = new Set(MIMICRY_LINES.map((line) => line.id));
+  assert.equal(ids.size, MIMICRY_LINES.length);
+  for (const line of MIMICRY_LINES) {
+    assert.match(line.malayalam, /[ഀ-ൿ]/, line.id);
+    assert.ok(line.title && line.meaning && line.delivery, line.id);
+    const recorded = existsSync(`public/audio/mimicry/${line.id}.wav`);
+    assert.equal(line.duration !== null, recorded, line.id);
+    assert.equal(PROMPTS.some((prompt) => prompt.id === line.id), recorded, line.id);
+  }
+});

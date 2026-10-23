@@ -1,0 +1,17 @@
+node_modules/
+.next/
+out/
+.env*.local
+*.tsbuildinfo
+test-results/
+playwright-report/
+.debug-test-results/
+.taste-skill/inspect/
+mimicry-takes/
+malayalam-memes/
+
+.vercel/
+.taste-skill/
+.env
+.env.*
+!.env.example

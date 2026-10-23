@@ -1,0 +1,30 @@
+Feature,Reference behavior,Evidence,Confidence,MVP priority,Implementation status
+One reference listen,Documented one-listen round,mimicparty.net/how-to-play/,verified,must,complete locally
+One recorded take,Documented browser capture,mimicparty.net/,verified,must,complete locally
+Score feedback,Documented local sound shape scoring,mimicparty.net/how-to-play/,verified,must,complete locally
+Sound packs,Public category selection,mimicparty.net/,verified,must,complete
+Reward wheel,Public bonus wheel,mimicparty.net/,verified,must,complete locally
+Private multiplayer rooms,Not verified at supplied solo URL,User requirement,unverified,must,implemented; Supabase verification pending
+Ready and host controls,Not verified at supplied solo URL,User requirement,unverified,must,complete locally
+Synchronized cross-device rounds,Not verified at supplied solo URL,User requirement,unverified,must,implemented; Supabase verification pending
+Protected shared audio,Reference explicitly describes local voice only,User requirement,unverified,must,implemented; policies not executed
+Sequential party playback,Reference documents solo replay,User requirement,unverified,must,complete locally
+Sabotage and shields,Not verified at supplied solo URL,User requirement,unverified,must,implemented; rule tested
+Final leaderboard,Reference has solo run results,User requirement,unverified,must,complete locally
+Host recovery,Not applicable to documented solo reference,User requirement,unverified,must,complete locally
+Malayalam labels and dialogue,Independent addition,Original text,verified,must,labels available; spoken dialogue withheld pending recordings
+Mobile layout,Responsive independent implementation,Edge viewport automation,verified,must,viewport tested; physical devices pending
+24h physical recording deletion,Managed retention function supplied,Requires user Supabase deployment,unverified,must,implemented; schedule pending
+Continuous voice chat,Not verified at supplied URL,Explicitly deferred in updated brief,unverified,could,out of MVP
+Recognizable recorded reference audio,Clear target sound before imitation,User playback feedback and CC0 source pages,verified,must,12 CC0 recordings integrated; browser decoding and playback signal verified
+Open Malayalam speech,Real spoken reference words,Commons Amhm2018 CC BY-SA 4.0,verified,must,3 OGG clips decoded and integrated with visible credits
+Stage-led game interface,Performer and controls share a stage,User screenshots,verified,must,implemented; desktop mobile and full local match verified
+Meme sound library with cue phrases,"120 refs in 10 worlds, phrase + difficulty per sound",mimicparty.net/sound-library/,verified,should,partial; cue phrase via title; no difficulty rating yet
+Malayalam movie-style dialogue,Reference uses soundboard rips (GitHub/Commons); Myinstants and Voicemod Tuna terms allow personal non-commercial use only,"myinstants.com terms, voicemod.net terms 6.a",verified,must,original Mimicry script (18 lines) + import pipeline; 0 lines recorded yet
+Host-added private room clips,Independent addition for movie voices without bundling them,User decision 2026-10-23,verified,must,complete locally; Supabase policy 003 not yet applied to live project
+Open-licence meme/scream/robot references,Reference bundles ~195 soundboard rips plus Commons files,"mimicparty.net attribution page; Commons API licence check 2026-10-23",verified,should,11 Commons files imported (1 CC0 + 10 CC BY-SA 4.0); GitHub soundboard rips declined (code licences do not cover audio)
+Performers walk to the mic one by one,Independent addition requested by user,User request 2026-10-23,verified,must,complete locally; walk cycle driven by distance; take starts on arrival
+Per-performance score reveal,Reference shows replay then score,mimicparty.net/how-to-play/,verified,must,complete locally
+Emotes and dance,Independent addition requested by user,User request 2026-10-23,verified,should,complete locally; host rate-limited
+Rotten tomatoes,Independent addition requested by user,User request 2026-10-23,verified,should,complete locally; visual only; counts toward awards
+Shared wheel results,Independent addition requested by user,User request 2026-10-23,verified,should,complete locally

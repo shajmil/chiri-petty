@@ -1,0 +1,21 @@
+Chiri Party asset credits
+
+Original procedural stage, characters, avatars, logo and prompt text: created for this project.
+
+Sound library: short clips from public GitHub meme soundboards (3kh0/soundboard, PareekshithPalat/IDE-Error-Soundboard,
+evansuong/Meme-Soundboard-Webpage, Fazalhasann/Fazals-Meme-SoundBoard, bytevictor/FAAAAH-meme-sound-multiplatform,
+jimmytop/soundmachine, EmanuelJrc/WeeBoard), Wikimedia Commons, and Malayalam film clips the project owner saved
+from Myinstants pages (film audio with no licence). Every clip's source repository and path, the licence
+that repository declares, the source and final file hashes and the edits made are listed in audio/library/CREDITS.json.
+A repository's licence covers what its authors own; many of these clips originate from films, games and other products
+whose owners have not licensed them here. Rights holders who want a clip removed can identify it by its source path.
+
+Wikimedia Commons clips: Wilhelm Scream (CC0); Scream-c/d/e (Raspberry Pi Foundation, Andy Oakley), wagtail and munia calls
+(Sharadapte), German "Roboter" words (Jeuwre), all CC BY-SA 4.0 and shared under the same licence after trimming.
+
+Anek Malayalam: Copyright 2021 The Anek Project Authors (https://github.com/EkType/Anek).
+SIL Open Font License 1.1. Full license: /licenses/Anek-Malayalam-OFL.txt.
+Bundled locally through @fontsource/anek-malayalam; https://fontsource.org/fonts/anek-malayalam.
+
+Three.js: Copyright 2010–2026 three.js authors. MIT License.
+Full license: /licenses/Three-MIT.txt. https://threejs.org/.

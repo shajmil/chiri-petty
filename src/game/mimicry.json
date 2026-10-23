@@ -1,0 +1,146 @@
+[
+  {
+    "id": "mm-ayyo",
+    "title": "Ayyooo!",
+    "malayalam": "അയ്യോ!",
+    "meaning": "Oh no!",
+    "delivery": "A long wail of shock that starts high and falls slowly.",
+    "duration": null
+  },
+  {
+    "id": "mm-shivane",
+    "title": "Shivaneee!",
+    "malayalam": "ശിവനേ!",
+    "meaning": "Oh God!",
+    "delivery": "A desperate prayer. Rise on 'shi', then hold the final 'eee'.",
+    "duration": null
+  },
+  {
+    "id": "mm-manasilayo",
+    "title": "Manasilaayo?",
+    "malayalam": "മനസ്സിലായോ?",
+    "meaning": "Understood?",
+    "delivery": "Slow and menacing. Lean on every syllable.",
+    "duration": null
+  },
+  {
+    "id": "mm-kunjimone",
+    "title": "Kunjimone…",
+    "malayalam": "കുഞ്ഞിമോനേ…",
+    "meaning": "My little boy…",
+    "delivery": "Sweet and sing-song, like calling a child for lunch.",
+    "duration": null
+  },
+  {
+    "id": "mm-chetta",
+    "title": "Chettaaa!",
+    "malayalam": "ചേട്ടാ!",
+    "meaning": "Brother!",
+    "delivery": "Shouted across a busy road. One long call.",
+    "duration": null
+  },
+  {
+    "id": "mm-entammo",
+    "title": "Entammo!",
+    "malayalam": "എന്റമ്മോ!",
+    "meaning": "Oh my mother!",
+    "delivery": "Total disbelief. A quick rise, then a drawn-out 'mmo'.",
+    "duration": null
+  },
+  {
+    "id": "mm-shari",
+    "title": "Shari… shari… SHARI.",
+    "malayalam": "ശരി… ശരി… ശരി.",
+    "meaning": "Okay… okay… OKAY.",
+    "delivery": "Polite at first, angrier each time. Three beats.",
+    "duration": null
+  },
+  {
+    "id": "mm-pinnallathe",
+    "title": "Pinnallathe!",
+    "malayalam": "പിന്നല്ലാതെ!",
+    "meaning": "Obviously!",
+    "delivery": "Completely over-confident. Snap the end.",
+    "duration": null
+  },
+  {
+    "id": "mm-enthuvade",
+    "title": "Enthuvaade ithu?",
+    "malayalam": "എന്തുവാടേ ഇത്?",
+    "meaning": "What is this, man?",
+    "delivery": "Puzzled and annoyed. Rise on the question.",
+    "duration": null
+  },
+  {
+    "id": "mm-kaanichu-tharam",
+    "title": "Ninakku njan kaanichu tharaam!",
+    "malayalam": "നിനക്ക് ഞാൻ കാണിച്ചു തരാം!",
+    "meaning": "I'll show you!",
+    "delivery": "A tiny villain's threat. Low, slow, then a short evil laugh.",
+    "duration": null
+  },
+  {
+    "id": "mm-sathyam",
+    "title": "Sathyam!",
+    "malayalam": "സത്യം!",
+    "meaning": "I swear it's true!",
+    "delivery": "Dramatic courtroom oath. One loud, firm word.",
+    "duration": null
+  },
+  {
+    "id": "mm-kashtam",
+    "title": "Kashtam…",
+    "malayalam": "കഷ്ടം…",
+    "meaning": "What a pity…",
+    "delivery": "Deeply disappointed. Add a tut before the word.",
+    "duration": null
+  },
+  {
+    "id": "mm-adipoli",
+    "title": "Adipoli!",
+    "malayalam": "അടിപൊളി!",
+    "meaning": "Awesome!",
+    "delivery": "Pure hype. Bounce on 'a-di', explode on 'poli'.",
+    "duration": null
+  },
+  {
+    "id": "mm-ente-ponno",
+    "title": "Ente ponno!",
+    "malayalam": "എന്റെ പൊന്നോ!",
+    "meaning": "Oh my dear!",
+    "delivery": "Exhausted and exasperated. Sigh into it.",
+    "duration": null
+  },
+  {
+    "id": "mm-chaya",
+    "title": "Ente chaaya evide?",
+    "malayalam": "എന്റെ ചായ എവിടെ?",
+    "meaning": "Where is my tea?",
+    "delivery": "Asked as if this is the greatest betrayal of your life.",
+    "duration": null
+  },
+  {
+    "id": "mm-ippo-ethum",
+    "title": "Njan ippo ethum!",
+    "malayalam": "ഞാൻ ഇപ്പോൾ എത്തും!",
+    "meaning": "I'll be there now!",
+    "delivery": "Completely unjustified confidence. You are still in bed.",
+    "duration": null
+  },
+  {
+    "id": "mm-aara-kazhichathu",
+    "title": "Ithokke aaraa kazhichathu?",
+    "malayalam": "ഇതൊക്കെ ആരാ കഴിച്ചത്?",
+    "meaning": "Who ate all this?",
+    "delivery": "Staring at the bill in dramatic disbelief.",
+    "duration": null
+  },
+  {
+    "id": "mm-idea",
+    "title": "Enikku oru idea undu!",
+    "malayalam": "എനിക്ക് ഒരു ഐഡിയ ഉണ്ട്!",
+    "meaning": "I have an idea!",
+    "delivery": "Announced like a very small villain with a very bad plan.",
+    "duration": null
+  }
+]
