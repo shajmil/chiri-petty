@@ -200,29 +200,77 @@ export function findPrompt(id: string, customClips: Prompt[] = []): Prompt {
   );
 }
 
+function randomInt(limit: number): number {
+  const random = new Uint32Array(1);
+  crypto.getRandomValues(random);
+  return random[0] % limit;
+}
+
+function shuffle<T>(items: T[]): T[] {
+  const shuffled = [...items];
+  for (let index = shuffled.length - 1; index > 0; index--) {
+    const nextIndex = randomInt(index + 1);
+    [shuffled[index], shuffled[nextIndex]] = [shuffled[nextIndex], shuffled[index]];
+  }
+  return shuffled;
+}
+
+/** Sounds from the previous match go last, so a rematch starts with fresh ones. */
+function freshFirst(ids: string[], previousDeck: string[]): string[] {
+  const recent = new Set(previousDeck);
+  return [
+    ...shuffle(ids.filter((id) => !recent.has(id))),
+    ...shuffle(ids.filter((id) => recent.has(id))),
+  ];
+}
+
+/** Takes `count` ids in order, starting over only after every id has been used once. */
+function takeWithoutRepeats(ids: string[], count: number): string[] {
+  if (!ids.length) return [];
+  return Array.from({ length: count }, (_, index) => ids[index % ids.length]);
+}
+
+/** Moves a sound away from an identical neighbour, which can only happen once a pool runs out. */
+function separateNeighbours(deck: string[]): string[] {
+  const result = [...deck];
+  for (let index = 1; index < result.length; index++) {
+    if (result[index] !== result[index - 1]) continue;
+    const swapWith = result.findIndex(
+      (id, other) =>
+        id !== result[index] &&
+        result[other - 1] !== result[index] &&
+        result[other + 1] !== result[index],
+    );
+    if (swapWith >= 0)
+      [result[index], result[swapWith]] = [result[swapWith], result[index]];
+  }
+  return result;
+}
+
 export function createDeck(
   category: Category,
   count: number,
   customClips: Prompt[] = [],
+  previousDeck: string[] = [],
 ): string[] {
-  const candidates =
-    category === "custom"
-      ? customClips
-      : PROMPTS.filter(
-          (prompt) => category === "mixed" || prompt.category === category,
-        );
-  const shuffled = [...candidates];
-  for (let index = shuffled.length - 1; index > 0; index--) {
-    const random = new Uint32Array(1);
-    crypto.getRandomValues(random);
-    const nextIndex = random[0] % (index + 1);
-    [shuffled[index], shuffled[nextIndex]] = [
-      shuffled[nextIndex],
-      shuffled[index],
-    ];
+  if (category === "custom")
+    return separateNeighbours(
+      takeWithoutRepeats(freshFirst(customClips.map((clip) => clip.id), previousDeck), count),
+    );
+  if (category !== "mixed") {
+    const worldIds = PROMPTS.filter((prompt) => prompt.category === category).map((prompt) => prompt.id);
+    return separateNeighbours(takeWithoutRepeats(freshFirst(worldIds, previousDeck), count));
   }
-  return Array.from(
-    { length: count },
-    (_, index) => shuffled[index % shuffled.length].id,
-  );
+  // Full chaos: Malayalam movie clips fill about half the rounds (3 or 4 of 7).
+  // No other sound appears twice; Malayalam clips repeat only after all of them have been used.
+  const malayalamIds = PROMPTS.filter((prompt) => prompt.category === "malayalam-movies").map((prompt) => prompt.id);
+  const otherIds = PROMPTS.filter((prompt) => prompt.category !== "malayalam-movies").map((prompt) => prompt.id);
+  const malayalamRounds = malayalamIds.length
+    ? Math.min(count, Math.floor(count / 2) + (count % 2 === 1 ? randomInt(2) : 0))
+    : 0;
+  const deck = [
+    ...takeWithoutRepeats(freshFirst(malayalamIds, previousDeck), malayalamRounds),
+    ...takeWithoutRepeats(freshFirst(otherIds, previousDeck), count - malayalamRounds),
+  ];
+  return separateNeighbours(shuffle(deck));
 }

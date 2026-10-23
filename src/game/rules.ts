@@ -8,6 +8,8 @@ import type {
 } from "./types";
 
 export const UPLOAD_GRACE_MS = 12000;
+export const ROUND_CHOICES = [2, 3, 5, 7, 10];
+export const DEFAULT_ROUNDS = 7;
 export const CUSTOM_CLIP_LIMIT = 12;
 export const CUSTOM_CLIP_MIN_SECONDS = 0.5;
 export const CUSTOM_CLIP_MAX_SECONDS = 6;
@@ -64,7 +66,7 @@ export function createRoom(code: string, host: Player): RoomState {
     players: [host],
     settings: {
       category: "mixed",
-      rounds: 3,
+      rounds: 7,
       maxPlayers: 8,
     },
     deck: [],

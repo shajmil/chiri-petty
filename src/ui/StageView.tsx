@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Stage } from "../world/Stage";
+import type { CameraShot, Stage } from "../world/Stage";
 import type { StageActor } from "../world/Character";
 import type { AudioManager } from "../core/AudioManager";
 import type { StageEvent } from "../game/types";
@@ -16,7 +16,9 @@ export interface StageScene {
   clock: () => number;
   /** True during rounds, when text overlays the top of the stage. */
   isRound: boolean;
-  closeUp?: boolean;
+  /** Which character the camera frames, and how closely. */
+  focusId: string;
+  shot: CameraShot;
 }
 
 export default function StageView({
@@ -60,7 +62,8 @@ export default function StageView({
       if (!stage.current) return;
       const current = latestScene.current;
       stage.current.setRoundFraming(current.isRound);
-      stage.current.closeUp = current.closeUp ?? false;
+      stage.current.focusId = current.focusId;
+      stage.current.shot = current.shot;
       stage.current.setCast(current.actors);
       stage.current.performerId = current.performerId;
       stage.current.talkingId = current.talkingId;

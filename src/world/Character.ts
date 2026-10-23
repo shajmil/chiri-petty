@@ -25,6 +25,7 @@ export interface Character {
   stridePhase: number;
   danceStartedAt: number;
   splats: THREE.Mesh[];
+  label: THREE.Sprite | null;
 }
 
 export interface SharedMaterials {
@@ -189,7 +190,8 @@ export function buildCharacter(
     ring.position.y = 0.06;
     root.add(ring);
   }
-  if (actor.name) root.add(labelSprite(actor.name, actor.isYou));
+  const label = actor.name ? labelSprite(actor.name, actor.isYou) : null;
+  if (label) root.add(label);
 
   return {
     actor,
@@ -205,6 +207,7 @@ export function buildCharacter(
     stridePhase: 0,
     danceStartedAt: -100,
     splats: [],
+    label,
   };
 }
 

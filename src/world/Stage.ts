@@ -15,6 +15,8 @@ import {
   type StageActor,
 } from "./Character";
 
+export type CameraShot = "wide" | "portrait" | "medium";
+
 const MIC_SPOT = new THREE.Vector3(0, 0, 1.6);
 // The first four players stand on the floor; players five to eight stand on the back riser.
 const AUDIENCE_SLOTS = [
@@ -71,9 +73,15 @@ export class Stage {
   public performerId = "";
   public talkingId = "";
   public chorus = false;
-  public closeUp = false;
+  /** Which character the camera frames, and how closely. */
+  public focusId = "";
+  public shot: CameraShot = "wide";
   private readonly wideCamera = new THREE.Vector3();
-  private wideLookHeight = 2.3;
+  private readonly wideLook = new THREE.Vector3();
+  private readonly cameraGoal = new THREE.Vector3();
+  private readonly lookGoal = new THREE.Vector3();
+  private readonly currentLook = new THREE.Vector3();
+  private hasFramed = false;
   public reducedMotion = false;
   private isRoundFraming = false;
 
@@ -310,10 +318,14 @@ export class Stage {
     // Wide laptop panels can aim highest; tall phone panels already have room above the cast.
     const lookAtHeight = !this.isRoundFraming ? 2.3 : this.camera.aspect >= 1.2 ? 3.8 : 2.9;
     const minimumDistance = this.isRoundFraming && this.camera.aspect < 1.2 ? 14 : 13.5;
-    this.camera.position.set(0, 4.6, Math.min(34, Math.max(minimumDistance, distance)));
-    this.wideCamera.copy(this.camera.position);
-    this.wideLookHeight = lookAtHeight;
-    this.camera.lookAt(0, lookAtHeight, 0);
+    this.wideCamera.set(0, 4.6, Math.min(34, Math.max(minimumDistance, distance)));
+    this.wideLook.set(0, lookAtHeight, 0);
+    if (!this.hasFramed) {
+      this.camera.position.copy(this.wideCamera);
+      this.currentLook.copy(this.wideLook);
+      this.camera.lookAt(this.currentLook);
+      this.hasFramed = true;
+    }
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height, false);
   }
@@ -326,19 +338,47 @@ export class Stage {
       this.world.rotation.y += (this.pointerX - this.world.rotation.y) * Math.min(1, delta * 5);
       this.world.rotation.x += (this.pointerY - this.world.rotation.x) * Math.min(1, delta * 5);
     }
+    // Name labels would fill the screen in a close portrait, so they hide for that shot.
+    const showLabels = this.shot !== "portrait" || this.reducedMotion;
     this.castOrder.forEach((id, index) => {
       const character = this.characters.get(id);
-      if (character) this.animateCharacter(character, index, delta);
+      if (!character) return;
+      if (character.label) character.label.visible = showLabels;
+      this.animateCharacter(character, index, delta);
     });
     this.animateTomatoes();
     this.animateEmotes();
-    const focus = this.characters.get(this.performerId)?.root.position;
-    const targetCamera = this.closeUp && focus
-      ? new THREE.Vector3(focus.x, 3.1, focus.z + 7)
-      : this.wideCamera;
-    this.camera.position.lerp(targetCamera, this.reducedMotion ? 1 : Math.min(1, delta * 3));
-    this.camera.lookAt(this.closeUp && focus ? focus.x : 0, this.closeUp ? 2.5 : this.wideLookHeight, this.closeUp && focus ? focus.z : 0);
+    this.moveCamera(delta);
     this.renderer.render(this.scene, this.camera);
+  }
+
+  private moveCamera(delta: number): void {
+    const focus = this.characters.get(this.focusId);
+    if (this.shot === "wide" || !focus || this.reducedMotion) {
+      this.cameraGoal.copy(this.wideCamera);
+      this.lookGoal.copy(this.wideLook);
+    } else {
+      const isPortrait = this.shot === "portrait";
+      const tanHalfFov = Math.tan((this.camera.fov * Math.PI) / 360);
+      // A portrait frames the face with the mic head beside it; a medium shot frames the whole performer.
+      const subject = focus.root.position.clone();
+      subject.x -= isPortrait ? 0.3 : 0.2;
+      subject.y += (isPortrait ? HEAD_HEIGHT : 1.9) * CHARACTER_SCALE;
+      const halfWidthNeeded = isPortrait ? 1.5 : 2.8;
+      const distance = Math.max(
+        isPortrait ? 3.8 : 6.5,
+        halfWidthNeeded / (tanHalfFov * this.camera.aspect),
+      );
+      // Text sits over the top of the stage, so keep the subject in the lower part of the frame.
+      const lift = distance * tanHalfFov * 0.42;
+      this.lookGoal.set(subject.x, subject.y + lift, subject.z);
+      this.cameraGoal.set(subject.x, subject.y + lift + 0.3, subject.z + distance);
+    }
+    // Exponential easing: quick to start, gentle to settle, and the same speed at any frame rate.
+    const ease = this.reducedMotion ? 1 : 1 - Math.exp(-delta * 4.5);
+    this.camera.position.lerp(this.cameraGoal, ease);
+    this.currentLook.lerp(this.lookGoal, ease);
+    this.camera.lookAt(this.currentLook);
   }
 
   private animateCharacter(character: Character, index: number, delta: number): void {

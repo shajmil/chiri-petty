@@ -4,30 +4,62 @@ import type { AudioManager } from "../core/AudioManager";
 
 const BARS = 80;
 
+export interface ShapeTimeline {
+  /** Clock time (milliseconds) when the clip or take starts. */
+  startAt: number;
+  durationSeconds: number;
+}
+
 export default function VoiceShape({
   audio,
-  progress,
+  timeline,
+  clock,
   isRecording,
 }: {
   audio: AudioManager;
-  progress: number | null;
+  timeline: ShapeTimeline | null;
+  clock: () => number;
   isRecording: boolean;
 }) {
   const [reference, setReference] = useState<number[]>([]);
   const [take, setTake] = useState<number[]>([]);
-  const latest = useRef({ progress, isRecording });
+  const latest = useRef({ timeline, clock, isRecording });
   const wasRecording = useRef(false);
-  latest.current = { progress, isRecording };
+  const playheads = useRef<(HTMLElement | null)[]>([]);
+  latest.current = { timeline, clock, isRecording };
+
+  function currentProgress(): number | null {
+    const current = latest.current;
+    if (!current.timeline) return null;
+    return (current.clock() - current.timeline.startAt) / 1000 / current.timeline.durationSeconds;
+  }
+
+  // The playhead moves every animation frame by writing its position directly, so it glides smoothly
+  // without re-rendering all the waveform bars.
+  useEffect(() => {
+    let frame = 0;
+    const movePlayheads = () => {
+      const progress = currentProgress();
+      for (const playhead of playheads.current) {
+        if (!playhead) continue;
+        playhead.style.display = progress === null ? "none" : "block";
+        playhead.style.left = `${Math.min(100, Math.max(0, (progress ?? 0) * 100))}%`;
+      }
+      frame = requestAnimationFrame(movePlayheads);
+    };
+    frame = requestAnimationFrame(movePlayheads);
+    return () => cancelAnimationFrame(frame);
+  }, []);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
       setReference([...audio.referenceShape]);
-      const current = latest.current;
-      if (current.isRecording && current.progress !== null) {
+      const progress = currentProgress();
+      if (latest.current.isRecording && progress !== null) {
         // Draw the live take under the reference at the same point in time.
         const startsNewTake = !wasRecording.current;
         wasRecording.current = true;
-        const bar = Math.min(BARS - 1, Math.floor(current.progress * BARS));
+        const bar = Math.min(BARS - 1, Math.max(0, Math.floor(progress * BARS)));
         const level = audio.readLevel();
         setTake((previous) => {
           const next = startsNewTake ? new Array(BARS).fill(0) : [...previous];
@@ -42,9 +74,6 @@ export default function VoiceShape({
     return () => clearInterval(timer);
   }, [audio]);
 
-  const playheadLeft =
-    progress === null ? null : `${Math.min(100, Math.max(0, progress * 100))}%`;
-
   return (
     <section
       className="voice-shape"
@@ -55,7 +84,7 @@ export default function VoiceShape({
         <span>
           {isRecording
             ? "MIC LIVE · FOLLOW THE LINE"
-            : progress !== null
+            : timeline
               ? "LISTEN TO THE SHAPE"
               : "LISTEN · MIMIC · REPLAY"}
         </span>
@@ -65,7 +94,7 @@ export default function VoiceShape({
           ["Reference", reference],
           ["Your take", take],
         ] as const
-      ).map(([label, samples]) => (
+      ).map(([label, samples], lane) => (
         <div className="wave-lane" key={label}>
           <span>{label}</span>
           <div aria-label={`${label} waveform`} role="img">
@@ -77,9 +106,13 @@ export default function VoiceShape({
                 }}
               />
             ))}
-            {playheadLeft && (
-              <b className="playhead" style={{ left: playheadLeft }} />
-            )}
+            <b
+              className="playhead"
+              ref={(element) => {
+                playheads.current[lane] = element;
+              }}
+              style={{ display: "none" }}
+            />
           </div>
         </div>
       ))}

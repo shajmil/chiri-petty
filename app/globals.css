@@ -1593,11 +1593,6 @@ input[type="checkbox"] {
 }
 
 /* Karaoke cue, count-in and recording panel */
-@property --fill {
-  syntax: "<percentage>";
-  inherits: false;
-  initial-value: 0%;
-}
 .challenge-card {
   display: inline-flex;
   flex-direction: column;
@@ -1693,7 +1688,6 @@ input[type="checkbox"] {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  transition: --fill 0.12s linear;
 }
 .lyric-part.current {
   transform: translateY(-2px) scale(1.06);
@@ -1840,9 +1834,6 @@ input[type="checkbox"] {
   .rec-pill {
     animation: none;
   }
-  .lyric-part {
-    transition: none;
-  }
 }
 /* The challenge card is one compact line so the cast stays visible. */
 .challenge-card {
@@ -1899,9 +1890,6 @@ input[type="checkbox"] {
   .match-view .game-panel {
     min-height: 0;
     height: 100%;
-  }
-  .match-view .round-theatre {
-    bottom: 148px;
   }
   .match-view .prompt-screen {
     min-height: 0;
@@ -2044,3 +2032,200 @@ input[type="checkbox"] {
 .audio-settings input[type=range] { margin: 6px 0; }
 .dialog:has(.audio-settings) h2, .dialog:has(.mic-check) h2 { font-size: 22px; }
 @media(min-width:600px) { .audio-settings { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 10px 16px; } .audio-settings .practice-actions, .audio-settings .practice-result { grid-column: 1 / -1; } }
+
+/* The 3D stage and its text overlays fill the space between the phase heading and the bottom controls,
+   so the controls never cover the stage on any screen size. */
+.stage-area {
+  position: relative;
+  isolation: isolate;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Phone rounds: one screen, players as a strip of chips, compact text and a single-row reaction bar. */
+@media (max-width: 899px) {
+  main.match-view + footer {
+    display: none;
+  }
+  .match-view .room-heading {
+    margin: 0 0 8px;
+    gap: 8px;
+  }
+  .match-view .room-heading p.muted {
+    display: none;
+  }
+  .match-view .room-heading h1 {
+    font-size: 18px;
+  }
+  .match-view .game-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .match-view .players-panel {
+    padding: 6px 8px;
+    border-radius: 14px;
+  }
+  .match-view .players-panel .section-heading,
+  .match-view .players-panel > .secondary,
+  .match-view .privacy-note,
+  .match-view .player-list small {
+    display: none;
+  }
+  .match-view .player-list {
+    display: flex;
+    gap: 6px;
+    margin: 0;
+    overflow-x: auto;
+  }
+  .match-view .player-list li {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 3px;
+    border-radius: 999px;
+    background: var(--raised);
+  }
+  .match-view .player-list .avatar {
+    width: 26px;
+    height: 26px;
+  }
+  .match-view .player-list strong,
+  .match-view .player-score {
+    font-size: 13px;
+  }
+  .match-view .game-panel {
+    height: calc(100dvh - 236px);
+    min-height: 470px;
+  }
+  .match-view .phase-heading {
+    padding: 8px 12px;
+  }
+  .match-view .prompt-screen,
+  .match-view .playback-screen {
+    min-height: 0;
+    padding: 8px 12px 0;
+  }
+  .match-view .challenge-card {
+    gap: 2px 8px;
+    padding: 4px 10px;
+  }
+  .match-view .challenge-card > strong {
+    font-size: 14px;
+  }
+  .match-view .challenge-card > span {
+    font-size: 11px;
+  }
+  .match-view .prompt-screen .prompt-headline,
+  .match-view .playback-screen h2 {
+    margin-top: 6px;
+    font-size: 20px;
+  }
+  .match-view .prompt-subline {
+    font-size: 13px;
+  }
+  .match-view .lyrics {
+    margin-top: 8px;
+    padding: 6px 12px;
+    font-size: 22px;
+  }
+  .match-view .count-in {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    translate: -50% -50%;
+    z-index: 1;
+    margin: 0;
+    font-size: 110px;
+    pointer-events: none;
+  }
+  .match-view .recording-panel {
+    gap: 6px 10px;
+    margin-top: 8px;
+    padding: 6px 10px;
+  }
+  .match-view .record-progress {
+    width: 110px;
+  }
+  .match-view .recording-panel .audio-meter {
+    width: 80px;
+  }
+  .match-view .performance-row {
+    gap: 6px;
+  }
+  .match-view .performance-status,
+  .match-view .crowd-count,
+  .match-view .audio-unlock {
+    padding: 3px 10px;
+    font-size: 12px;
+  }
+  .match-view .playback-screen .score-reveal {
+    width: 100%;
+    max-width: none;
+    margin-top: 8px;
+    padding: 8px 16px;
+  }
+  .match-view .score-screen {
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 52px;
+    z-index: 1;
+    max-height: calc(100% - 64px);
+    overflow-y: auto;
+    padding: 12px;
+  }
+  .match-view .score-screen > p {
+    display: none;
+  }
+  .match-view .score-screen h2 {
+    font-size: 17px;
+  }
+  .match-view .score-row {
+    padding: 6px 0;
+  }
+  .match-view .score-row > strong {
+    font-size: 22px;
+  }
+  .match-view .round-controls .voice-shape {
+    padding: 6px 10px;
+  }
+  .match-view .voice-shape > strong {
+    font-size: 9px;
+  }
+  .match-view .wave-lane {
+    height: 24px;
+    gap: 8px;
+  }
+  .match-view .wave-lane > span {
+    width: 52px;
+    font-size: 10px;
+  }
+  .match-view .wave-lane > div {
+    height: 20px;
+  }
+  .match-view .wave-lane i {
+    max-height: 20px;
+  }
+  .match-view .round-controls .reaction-bar {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 6px 10px;
+    overflow-x: auto;
+  }
+  .match-view .reaction-button {
+    flex: none;
+    min-width: 40px;
+    height: 40px;
+    font-size: 17px;
+  }
+  .match-view .reaction-button.wide {
+    padding: 0 12px;
+    font-size: 13px;
+  }
+}

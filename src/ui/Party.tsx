@@ -1,5 +1,5 @@
 "use client";
-import VoiceShape from "./VoiceShape";
+import VoiceShape, { type ShapeTimeline } from "./VoiceShape";
 
 import { useEffect, useReducer, useRef, useState } from "react";
 import { AudioManager } from "../core/AudioManager";
@@ -13,7 +13,12 @@ import {
   PROMPTS,
   findPrompt,
 } from "../game/prompts";
-import { canStart, recordingWindowSeconds } from "../game/rules";
+import {
+  canStart,
+  DEFAULT_ROUNDS,
+  recordingWindowSeconds,
+  ROUND_CHOICES,
+} from "../game/rules";
 import type { AudioScore, Category, Player, RoomState } from "../game/types";
 import type { StageActor } from "../world/Character";
 import {
@@ -98,6 +103,7 @@ export default function Party() {
   const countdown =
     room && game ? Math.ceil((room.recordAt - game.now) / 1000) : 0;
   const isRecordingLive = room?.phase === "RECORDING" && countdown <= 0;
+  const gameClock = () => game?.now ?? Date.now();
   const isInMatch = Boolean(
     room && room.phase !== "LOBBY" && room.phase !== "FINISHED",
   );
@@ -116,16 +122,13 @@ export default function Party() {
   const currentPack = PACKS.find((pack) => pack.id === prompt?.category);
   const isCountingIn = room?.phase === "RECORDING" && countdown > 0;
   const recordElapsed = room ? (now - room.recordAt) / 1000 : 0;
-  const listenElapsed = game?.referenceStartedAt
-    ? (now - game.referenceStartedAt) / 1000
-    : null;
   const [headline, subline] =
     room && prompt ? promptHeadline(room, prompt.title, prompt.cue) : ["", ""];
-  const shapeProgress =
-    room?.phase === "LISTENING" && listenElapsed !== null && prompt
-      ? listenElapsed / prompt.duration
+  const shapeTimeline: ShapeTimeline | null =
+    room?.phase === "LISTENING" && game?.referenceStartedAt && prompt
+      ? { startAt: game.referenceStartedAt, durationSeconds: prompt.duration }
       : isRecordingLive && prompt
-        ? recordElapsed / prompt.duration
+        ? { startAt: room.recordAt, durationSeconds: prompt.duration }
         : null;
 
   const homeScene: StageScene = {
@@ -137,6 +140,8 @@ export default function Party() {
     events: [],
     clock: Date.now,
     isRound: false,
+    focusId: "",
+    shot: "wide",
   };
   const roomScene: StageScene = {
     actors: connectedPlayers.map((player) => ({
@@ -146,12 +151,15 @@ export default function Party() {
       look: player.avatar,
       isYou: player.id === game?.playerId,
     })),
+    // While recording, your own character steps up to the mic on your screen during the count-in.
     performerId:
       room?.phase === "PLAYBACK"
         ? (currentTake?.playerId ?? "")
-        : isRecordingLive ? (game?.playerId ?? "") : room?.phase === "SCORING"
-          ? roundWinnerId(room)
-          : "",
+        : room?.phase === "RECORDING"
+          ? (game?.playerId ?? "")
+          : room?.phase === "SCORING"
+            ? roundWinnerId(room)
+            : "",
     talkingId:
       room?.phase === "PLAYBACK"
         ? (currentTake?.playerId ?? "")
@@ -159,11 +167,20 @@ export default function Party() {
           ? (game?.playerId ?? "")
           : "",
     levelSource: room?.phase === "PLAYBACK" ? "playback" : "mic",
-    chorus: false,
+    chorus: isRecordingLive,
     events: room?.stageEvents ?? [],
     clock: () => game?.now ?? Date.now(),
     isRound: isInMatch,
-    closeUp: isRecordingLive,
+    focusId:
+      room?.phase === "RECORDING"
+        ? (game?.playerId ?? "")
+        : (currentTake?.playerId ?? ""),
+    shot:
+      room?.phase === "RECORDING"
+        ? "portrait"
+        : room?.phase === "PLAYBACK" && currentTake
+          ? "medium"
+          : "wide",
   };
 
   async function connect(join: boolean) {
@@ -196,7 +213,7 @@ export default function Party() {
         await nextGame.command({
           type: "settings",
           category: selectedPack,
-          rounds: 3,
+          rounds: DEFAULT_ROUNDS,
         });
     } catch (failure) {
       setError(
@@ -299,7 +316,7 @@ export default function Party() {
 
   function changeSettings(
     category: Category,
-    rounds = room?.settings.rounds ?? 3,
+    rounds = room?.settings.rounds ?? DEFAULT_ROUNDS,
   ) {
     setSelectedPack(category);
     if (game) void game.command({ type: "settings", category, rounds });
@@ -633,7 +650,7 @@ export default function Party() {
                               )
                             }
                           >
-                            {[2, 3, 4, 5].map((rounds) => (
+                            {ROUND_CHOICES.map((rounds) => (
                               <option key={rounds}>{rounds}</option>
                             ))}
                           </select>
@@ -683,6 +700,7 @@ export default function Party() {
                       <p className="reaction-hint">
                         Warm up the crowd while you wait:
                       </p>
+                      <ReactionBar game={game} room={room} />
                       </div>
                   </>
                 ) : room.phase === "FINISHED" ? (
@@ -704,196 +722,201 @@ export default function Party() {
                   />
                 ) : (
                   <>
-                    <div className="round-theatre">
-                      <StageView
-                        audio={audio}
-                        scene={roomScene}
-                        reducedMotion={reducedMotion}
-                      />
-                    </div>
-                    <div className="phase-heading">
-                      <span className="phase-label">
-                        <span
-                          className={`status-dot ${room.phase === "RECORDING" && countdown <= 0 ? "recording-dot" : ""}`}
+                    <div className="stage-area">
+                      <div className="round-theatre">
+                        <StageView
+                          audio={audio}
+                          scene={roomScene}
+                          reducedMotion={reducedMotion}
                         />
-                        {phaseLabel(room.phase, countdown)}
-                      </span>
-                      <span className="countdown-small">{remaining}s</span>
-                    </div>
-                    {room.phase === "SCORING" ? (
-                      <div className="score-screen">
-                        <h2>Sound familiar?</h2>
-                        <p>
-                          Acoustic resemblance, with a side of friendly
-                          competition.
-                        </p>
-                        {room.players.map((player) => {
-                          const submission = room.submissions.find(
-                            (entry) => entry.playerId === player.id,
-                          );
-                          return (
-                            <div className="score-row" key={player.id}>
-                              <Avatar index={player.avatar} />
-                              <div>
-                                <strong>{player.name}</strong>
-                                <small>
-                                  {submission?.score.reason ??
-                                    "No take received before the deadline."}
-                                </small>
-                              </div>
-                              <strong>
-                                {submission?.score.overall ?? "—"}
-                                <small>/100</small>
-                              </strong>
-                            </div>
-                          );
-                        })}
-                        <p className="scoring-note">
-                          Local acoustic v1 · compares rhythm, envelope, pitch
-                          and texture. Scores can be manipulated by a modified
-                          client.
-                        </p>
                       </div>
-                    ) : room.phase === "PLAYBACK" ? (
-                      <div className="playback-screen">
-                        <p className="muted">
-                          Performance{" "}
-                          {Math.min(
-                            room.playbackIndex + 1,
-                            room.submissions.length,
-                          )}{" "}
-                          of {room.submissions.length}
-                        </p>
-                        <h2>{currentPerformer?.name ?? "No takes this round"}</h2>
-                        <div className="performance-row">
-                          <p className="performance-status" role="status">
-                            {!currentTake
-                              ? "Nobody made it to the mic."
-                              : !isPerforming
-                                ? "Walking up to the mic…"
-                                : !isScoreRevealed
-                                  ? "Performing · one take, no regrets"
-                                  : "And the score is…"}
-                          </p>
-                          {currentTake && (
-                            <p className="crowd-count" aria-live="polite">
-                              😂 {currentTake.reactionCount} · 🍅{" "}
-                              {currentTake.tomatoes}
-                            </p>
-                          )}
-                          <button
-                            className="audio-unlock"
-                            onClick={() => void audio.unlock()}
-                          >
-                            🔈 Can’t hear it? Tap
-                          </button>
-                        </div>
-                        {prompt && currentTake && isPerforming && !isScoreRevealed && (
-                          <LyricsTrack
-                            cue={prompt.cue}
-                            shape={audio.referenceShape}
-                            durationSeconds={prompt.duration}
-                            elapsedSeconds={(now - room.playbackStartAt) / 1000}
+                      <div className="phase-heading">
+                        <span className="phase-label">
+                          <span
+                            className={`status-dot ${room.phase === "RECORDING" && countdown <= 0 ? "recording-dot" : ""}`}
                           />
-                        )}
-                        {currentTake && isScoreRevealed && (
-                          <ScoreCard score={currentTake.score} />
-                        )}
+                          {phaseLabel(room.phase, countdown)}
+                        </span>
+                        <span className="countdown-small">{remaining}s</span>
                       </div>
-                    ) : (
-                      <div className="prompt-screen">
-                        {prompt && (
-                          <div className="challenge-card">
-                            <p className="challenge-world">
-                              {currentPack?.symbol} {currentPack?.name}
-                              {prompt.difficulty && (
-                                <span className={`difficulty ${prompt.difficulty}`}>
-                                  {prompt.difficulty}
-                                </span>
-                              )}
+                      {room.phase === "SCORING" ? (
+                        <div className="score-screen">
+                          <h2>Sound familiar?</h2>
+                          <p>
+                            Acoustic resemblance, with a side of friendly
+                            competition.
+                          </p>
+                          {room.players.map((player) => {
+                            const submission = room.submissions.find(
+                              (entry) => entry.playerId === player.id,
+                            );
+                            return (
+                              <div className="score-row" key={player.id}>
+                                <Avatar index={player.avatar} />
+                                <div>
+                                  <strong>{player.name}</strong>
+                                  <small>
+                                    {submission?.score.reason ??
+                                      "No take received before the deadline."}
+                                  </small>
+                                </div>
+                                <strong>
+                                  {submission?.score.overall ?? "—"}
+                                  <small>/100</small>
+                                </strong>
+                              </div>
+                            );
+                          })}
+                          <p className="scoring-note">
+                            Local acoustic v1 · compares rhythm, envelope, pitch
+                            and texture. Scores can be manipulated by a modified
+                            client.
+                          </p>
+                        </div>
+                      ) : room.phase === "PLAYBACK" ? (
+                        <div className="playback-screen">
+                          <p className="muted">
+                            Performance{" "}
+                            {Math.min(
+                              room.playbackIndex + 1,
+                              room.submissions.length,
+                            )}{" "}
+                            of {room.submissions.length}
+                          </p>
+                          <h2>{currentPerformer?.name ?? "No takes this round"}</h2>
+                          <div className="performance-row">
+                            <p className="performance-status" role="status">
+                              {!currentTake
+                                ? "Nobody made it to the mic."
+                                : !isPerforming
+                                  ? "Walking up to the mic…"
+                                  : !isScoreRevealed
+                                    ? "Performing · one take, no regrets"
+                                    : "And the score is…"}
                             </p>
-                            <strong>{prompt.title}</strong>
-                            <span>
-                              {prompt.duration.toFixed(1)}s clip · your take{" "}
-                              {recordingWindowSeconds(prompt.duration)}s
-                              {prompt.referenceKind === "custom"
-                                ? " · host’s private clip"
-                                : ""}
-                            </span>
+                            {currentTake && (
+                              <p className="crowd-count" aria-live="polite">
+                                😂 {currentTake.reactionCount} · 🍅{" "}
+                                {currentTake.tomatoes}
+                              </p>
+                            )}
+                            <button
+                              className="audio-unlock"
+                              onClick={() => void audio.unlock()}
+                            >
+                              🔈 Can’t hear it? Tap
+                            </button>
                           </div>
-                        )}
-                        {!isRecordingLive && (
-                          <>
-                            <h2 className="prompt-headline">{headline}</h2>
-                            <p className="prompt-subline">{subline}</p>
-                          </>
-                        )}
-                        {isCountingIn && (
-                          <strong key={countdown} className="count-in">
-                            {countdown}
-                          </strong>
-                        )}
-                        {prompt &&
-                          (room.phase === "LISTENING" ||
-                            room.phase === "RECORDING") && (
+                          {prompt && currentTake && isPerforming && !isScoreRevealed && (
                             <LyricsTrack
                               cue={prompt.cue}
                               shape={audio.referenceShape}
                               durationSeconds={prompt.duration}
-                              elapsedSeconds={
-                                room.phase === "LISTENING"
-                                  ? listenElapsed
-                                  : isRecordingLive
-                                    ? recordElapsed
-                                    : null
-                              }
+                              startAt={room.playbackStartAt}
+                              clock={gameClock}
                             />
                           )}
-                        {isRecordingLive && (
-                          <div className="recording-panel">
-                            <span className="rec-pill">
-                              <MicIcon /> REC
-                            </span>
-                            <div
-                              className="record-progress"
-                              role="progressbar"
-                              aria-label="Recording time"
-                              aria-valuemin={0}
-                              aria-valuemax={room.recordSeconds}
-                              aria-valuenow={Math.min(room.recordSeconds, recordElapsed)}
-                            >
-                              <span
-                                style={{
-                                  width: `${Math.min(100, (recordElapsed / room.recordSeconds) * 100)}%`,
-                                }}
-                              />
+                          {currentTake && isScoreRevealed && (
+                            <ScoreCard score={currentTake.score} />
+                          )}
+                        </div>
+                      ) : (
+                        <div className="prompt-screen">
+                          {prompt && (
+                            <div className="challenge-card">
+                              <p className="challenge-world">
+                                {currentPack?.symbol} {currentPack?.name}
+                                {prompt.difficulty && (
+                                  <span className={`difficulty ${prompt.difficulty}`}>
+                                    {prompt.difficulty}
+                                  </span>
+                                )}
+                              </p>
+                              <strong>{prompt.title}</strong>
+                              <span>
+                                {prompt.duration.toFixed(1)}s clip · your take{" "}
+                                {recordingWindowSeconds(prompt.duration)}s
+                                {prompt.referenceKind === "custom"
+                                  ? " · host’s private clip"
+                                  : ""}
+                              </span>
                             </div>
-                            <span className="record-time">
-                              {Math.min(room.recordSeconds, recordElapsed).toFixed(1)}s
-                              {" / "}
-                              {room.recordSeconds}s
-                            </span>
-                            <div
-                              className="audio-meter"
-                              aria-label="Microphone activity"
-                            >
-                              <span
-                                style={{ width: `${Math.max(2, micLevel * 100)}%` }}
+                          )}
+                          {!isRecordingLive && (
+                            <>
+                              <h2 className="prompt-headline">{headline}</h2>
+                              <p className="prompt-subline">{subline}</p>
+                            </>
+                          )}
+                          {isCountingIn && (
+                            <strong key={countdown} className="count-in">
+                              {countdown}
+                            </strong>
+                          )}
+                          {prompt &&
+                            (room.phase === "LISTENING" ||
+                              room.phase === "RECORDING") && (
+                              <LyricsTrack
+                                cue={prompt.cue}
+                                shape={audio.referenceShape}
+                                durationSeconds={prompt.duration}
+                                startAt={
+                                  room.phase === "LISTENING"
+                                    ? game.referenceStartedAt || null
+                                    : isRecordingLive
+                                      ? room.recordAt
+                                      : null
+                                }
+                                clock={gameClock}
                               />
+                            )}
+                          {isRecordingLive && (
+                            <div className="recording-panel">
+                              <span className="rec-pill">
+                                <MicIcon /> REC
+                              </span>
+                              <div
+                                className="record-progress"
+                                role="progressbar"
+                                aria-label="Recording time"
+                                aria-valuemin={0}
+                                aria-valuemax={room.recordSeconds}
+                                aria-valuenow={Math.min(room.recordSeconds, recordElapsed)}
+                              >
+                                <span
+                                  style={{
+                                    width: `${Math.min(100, (recordElapsed / room.recordSeconds) * 100)}%`,
+                                  }}
+                                />
+                              </div>
+                              <span className="record-time">
+                                {Math.min(room.recordSeconds, recordElapsed).toFixed(1)}s
+                                {" / "}
+                                {room.recordSeconds}s
+                              </span>
+                              <div
+                                className="audio-meter"
+                                aria-label="Microphone activity"
+                              >
+                                <span
+                                  style={{ width: `${Math.max(2, micLevel * 100)}%` }}
+                                />
+                              </div>
                             </div>
-                          </div>
-                        )}
-                        {!isRecordingLive && (
-                          <p role="status" className="take-status">
-                            {game.submissionStatus}
-                          </p>
-                        )}
-                      </div>
-                    )}
+                          )}
+                          {!isRecordingLive && (
+                            <p role="status" className="take-status">
+                              {game.submissionStatus}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="round-controls">
                       <VoiceShape
                         audio={audio}
-                        progress={shapeProgress}
+                        timeline={shapeTimeline}
+                        clock={gameClock}
                         isRecording={isRecordingLive}
                       />
                       <ReactionBar game={game} room={room} />

@@ -14,6 +14,8 @@ import {
   canStart,
   createCustomClip,
   createPlayer,
+  DEFAULT_ROUNDS,
+  ROUND_CHOICES,
   recordingWindowSeconds,
   SCORE_REVEAL_MS,
   unavailableScore,
@@ -213,9 +215,9 @@ export class Game {
           )
             ? command.category
             : "mixed";
-          room.settings.rounds = [2, 3, 4, 5].includes(command.rounds)
+          room.settings.rounds = ROUND_CHOICES.includes(command.rounds)
             ? command.rounds
-            : 3;
+            : DEFAULT_ROUNDS;
         }
         break;
       case "addClip": {
@@ -244,6 +246,7 @@ export class Game {
             room.settings.category,
             room.settings.rounds,
             room.customClips,
+            room.deck,
           );
           room.results = [];
           room.round = 0;

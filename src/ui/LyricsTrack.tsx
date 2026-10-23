@@ -1,20 +1,45 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { timeLyrics } from "../game/lyrics";
 
-/** Karaoke-style cue: each piece fills in as the clip (or your take) reaches it. */
+/**
+ * Karaoke-style cue: each piece fills in as the clip (or your take) reaches it.
+ * It redraws every animation frame from `startAt`, so the fill moves smoothly
+ * instead of jumping whenever the rest of the page happens to update.
+ */
 export default function LyricsTrack({
   cue,
   shape,
   durationSeconds,
-  elapsedSeconds,
+  startAt,
+  clock,
 }: {
   cue: string;
   shape: number[];
   durationSeconds: number;
-  elapsedSeconds: number | null;
+  /** Clock time (in `clock()` units, milliseconds) when the clip or take starts; null before it starts. */
+  startAt: number | null;
+  clock: () => number;
 }) {
+  const [elapsedSeconds, setElapsedSeconds] = useState<number | null>(null);
+  const latestClock = useRef(clock);
+  latestClock.current = clock;
+
+  useEffect(() => {
+    if (startAt === null) {
+      setElapsedSeconds(null);
+      return;
+    }
+    let frame = 0;
+    const update = () => {
+      setElapsedSeconds((latestClock.current() - startAt) / 1000);
+      frame = requestAnimationFrame(update);
+    };
+    frame = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(frame);
+  }, [startAt]);
+
   const parts = timeLyrics(cue, shape, durationSeconds);
   const isMalayalam = /[ഀ-ൿ]/.test(cue);
   return (

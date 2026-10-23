@@ -77,10 +77,6 @@ export default function MicCheck({
     }
   }
 
-  const elapsedSeconds =
-    step === "listening" || step === "recording"
-      ? (performance.now() - startedAt) / 1000
-      : null;
 
   return (
     <div className="mic-check">
@@ -121,7 +117,8 @@ export default function MicCheck({
           cue={SAMPLE.cue}
           shape={audio.referenceShape}
           durationSeconds={SAMPLE.duration}
-          elapsedSeconds={elapsedSeconds}
+          startAt={step === "listening" || step === "recording" ? startedAt : null}
+          clock={() => performance.now()}
         />
         <div className="audio-meter" aria-label="Microphone activity">
           <span style={{ width: `${Math.max(2, micLevel * 100)}%` }} />
