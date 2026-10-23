@@ -47,7 +47,7 @@ export function box(
   radius = 0.08,
 ): THREE.Mesh {
   const mesh = new THREE.Mesh(
-    new RoundedBoxGeometry(size[0], size[1], size[2], 2, radius),
+    new RoundedBoxGeometry(size[0], size[1], size[2], 3, radius),
     material,
   );
   mesh.position.set(position[0], position[1], position[2]);
@@ -63,7 +63,7 @@ export function sphere(
   position: number[],
   material: THREE.Material,
 ): THREE.Mesh {
-  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 24, 16), material);
+  const mesh = new THREE.Mesh(new THREE.SphereGeometry(radius, 32, 20), material);
   mesh.position.set(position[0], position[1], position[2]);
   mesh.castShadow = true;
   parent.add(mesh);
@@ -213,18 +213,18 @@ export function buildCharacter(
 
 function labelSprite(name: string, isYou: boolean): THREE.Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width = 256;
-  canvas.height = 64;
+  canvas.width = 512;
+  canvas.height = 128;
   const context = canvas.getContext("2d")!;
   context.fillStyle = isYou ? "#c6f24e" : "rgba(36, 29, 42, 0.88)";
   context.beginPath();
-  context.roundRect(4, 8, 248, 48, 24);
+  context.roundRect(8, 16, 496, 96, 48);
   context.fill();
   context.fillStyle = isYou ? "#171917" : "#fff2d7";
-  context.font = "600 28px 'Anek Malayalam', Arial, sans-serif";
+  context.font = "600 56px 'Anek Malayalam', Arial, sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(isYou ? `${name} (you)` : name, 128, 34, 232);
+  context.fillText(isYou ? `${name} (you)` : name, 256, 68, 464);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture }));
@@ -235,14 +235,14 @@ function labelSprite(name: string, isYou: boolean): THREE.Sprite {
 
 export function emojiSprite(emoji: string): THREE.Sprite {
   const canvas = document.createElement("canvas");
-  canvas.width = 128;
-  canvas.height = 128;
+  canvas.width = 256;
+  canvas.height = 256;
   const context = canvas.getContext("2d")!;
   context.font =
-    "92px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
+    "184px 'Segoe UI Emoji', 'Apple Color Emoji', 'Noto Color Emoji', sans-serif";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.fillText(emoji, 64, 70);
+  context.fillText(emoji, 128, 140);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   const sprite = new THREE.Sprite(

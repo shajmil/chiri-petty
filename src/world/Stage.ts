@@ -90,20 +90,18 @@ export class Stage {
       canvas,
       antialias: true,
       alpha: true,
-      powerPreference: "low-power",
     });
-    this.renderer.setPixelRatio(
-      Math.min(devicePixelRatio, innerWidth < 600 ? 1.25 : 1.75),
-    );
+    // Phones have 2-3x screens; rendering below 2x makes the stage look soft, above 2x costs a lot for little gain.
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.shadowMap.enabled = innerWidth > 600;
+    this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.scene.add(new THREE.HemisphereLight(0xffffff, 0x55594e, 3));
     const key = new THREE.DirectionalLight(0xfff4e2, 5);
     key.position.set(4, 8, 5);
     key.castShadow = true;
-    key.shadow.mapSize.set(1024, 1024);
+    key.shadow.mapSize.set(2048, 2048);
     key.shadow.camera.left = -6;
     key.shadow.camera.right = 6;
     key.shadow.camera.top = 6;
@@ -312,12 +310,14 @@ export class Stage {
     const height = this.canvas.clientHeight;
     this.camera.aspect = width / Math.max(1, height);
     // Pull back on narrow screens so the whole audience stays in view.
-    const halfWidthToShow = 5.8;
+    // Rounds keep room for up to eight players; the lobby and home stage can frame their cast more closely.
+    const halfWidthToShow = this.isRoundFraming ? 5.8 : 4.6;
     const distance = halfWidthToShow / (Math.tan((17.5 * Math.PI) / 180) * this.camera.aspect);
     // During rounds text covers the top of the stage, so aim higher to keep the cast in the lower part.
     // Wide laptop panels can aim highest; tall phone panels already have room above the cast.
     const lookAtHeight = !this.isRoundFraming ? 2.3 : this.camera.aspect >= 1.2 ? 3.8 : 2.9;
-    const minimumDistance = this.isRoundFraming && this.camera.aspect < 1.2 ? 14 : 13.5;
+    const minimumDistance =
+      this.isRoundFraming && this.camera.aspect < 1.2 ? 14 : width < 600 ? 9.5 : 13.5;
     this.wideCamera.set(0, 4.6, Math.min(34, Math.max(minimumDistance, distance)));
     this.wideLook.set(0, lookAtHeight, 0);
     if (!this.hasFramed) {

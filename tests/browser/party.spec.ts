@@ -303,6 +303,7 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
   await expect(page.locator(".crowd-count")).toContainText("😂 1 · 🍅 1");
   await expect(friend.locator(".crowd-count")).toContainText("😂 1 · 🍅 1");
   await expect(page.locator(".score-reveal")).toContainText(/\d+\s*\/100/, { timeout: 10000 });
+  await page.locator(".score-reveal summary").click();
   await expect(page.locator(".score-reveal .feature-bars li").first()).toBeVisible();
   await expect(page.locator(".phase-label")).toHaveText("Your gang, on stage");
 
