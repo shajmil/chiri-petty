@@ -165,7 +165,7 @@ export interface VoiceSignal {
 }
 
 export interface RealtimeProvider {
-  readonly kind: "online" | "tabs";
+  readonly kind: "online" | "tabs" | "solo";
   readonly playerId: string;
   clockOffset: number;
   open(code: string | null, name: string, avatar: number): Promise<RoomState>;

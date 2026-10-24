@@ -16,6 +16,7 @@ import {
 import {
   canStart,
   DEFAULT_ROUNDS,
+  isSoloRoom,
   RECORDING_LEAD_IN_SECONDS,
   ROUND_CHOICES,
   singingWindowSeconds,
@@ -27,6 +28,7 @@ import {
   onlineConfigured,
   SupabaseProvider,
 } from "../network/SupabaseProvider";
+import { SoloProvider } from "../network/SoloProvider";
 import { TabProvider } from "../network/TabProvider";
 import { VoiceChat } from "../network/VoiceChat";
 import StageView, { MicIcon, MicOffIcon, type StageScene } from "./StageView";
@@ -40,6 +42,12 @@ const HOME_ACTORS: StageActor[] = [
   { id: "home-left", name: "", color: "#e98763", look: 3, isYou: false },
   { id: "home-right", name: "", color: "#b5a1d3", look: 1, isYou: false },
   { id: "home-performer", name: "", color: "#28a49c", look: 0, isYou: false },
+];
+// Playing solo, a small crowd watches and cheers, so the stage never feels empty.
+const SOLO_CROWD: StageActor[] = [
+  { id: "crowd-left", name: "", color: "#e98763", look: 3, isYou: false },
+  { id: "crowd-right", name: "", color: "#b5a1d3", look: 1, isYou: false },
+  { id: "crowd-back", name: "", color: "#f2c14e", look: 5, isYou: false },
 ];
 type Dialog =
   | "rules"
@@ -104,6 +112,7 @@ export default function Party() {
 
   const room = game?.state;
   const me = room?.players.find((player) => player.id === game?.playerId);
+  const isSolo = room ? isSoloRoom(room) : false;
   const host = room?.players.find((player) => player.id === room.hostId);
   const prompt = room?.round ? findPrompt(room.deck[room.round - 1], room.customClips) : null;
   const connectedPlayers =
@@ -185,13 +194,16 @@ export default function Party() {
     showWallLogo: false,
   };
   const roomScene: StageScene = {
-    actors: connectedPlayers.map((player) => ({
-      id: player.id,
-      name: player.name,
-      color: AVATAR_COLORS[player.avatar % AVATAR_COLORS.length],
-      look: player.avatar,
-      isYou: player.id === game?.playerId,
-    })),
+    actors: [
+      ...connectedPlayers.map((player) => ({
+        id: player.id,
+        name: player.name,
+        color: AVATAR_COLORS[player.avatar % AVATAR_COLORS.length],
+        look: player.avatar,
+        isYou: player.id === game?.playerId,
+      })),
+      ...(isSolo ? SOLO_CROWD : []),
+    ],
     // While recording, your own character steps up to the mic on your screen during the count-in.
     performerId:
       room?.phase === "PLAYBACK"
@@ -230,10 +242,15 @@ export default function Party() {
     voiceLevel: chatLevel,
   };
 
-  async function connect(join: boolean) {
+  async function connect(entry: "create" | "join" | "solo") {
+    const join = entry === "join";
     setError("");
     if (!name.trim()) {
-      setError("First, tell your friends what to call you.");
+      setError(
+        entry === "solo"
+          ? "First, tell us what to call you."
+          : "First, tell your friends what to call you.",
+      );
       document.getElementById("player-name")?.focus();
       return;
     }
@@ -241,13 +258,18 @@ export default function Party() {
       setError("Enter the 8-character invitation code.");
       return;
     }
-    if (mode === "online" && !onlineConfigured) {
+    // Solo play stays on this device, so it works without the online setup.
+    if (entry !== "solo" && mode === "online" && !onlineConfigured) {
       setDialog("setup");
       return;
     }
     setBusy(true);
     const nextGame = new Game(
-      mode === "tabs" ? new TabProvider() : new SupabaseProvider(),
+      entry === "solo"
+        ? new SoloProvider()
+        : mode === "tabs"
+          ? new TabProvider()
+          : new SupabaseProvider(),
       audio,
     );
     try {
@@ -256,16 +278,18 @@ export default function Party() {
       await nextGame.open(join ? joinCode.trim() : null, name.trim(), avatar);
       gameRef.current = nextGame;
       setGame(nextGame);
-      const nextVoiceChat = new VoiceChat(nextGame.provider, audio);
-      nextVoiceChat.useMicrophone(audio.microphoneTrack());
-      nextVoiceChat.start();
-      voiceChatRef.current = nextVoiceChat;
-      setVoiceChat(nextVoiceChat);
+      if (entry !== "solo") {
+        const nextVoiceChat = new VoiceChat(nextGame.provider, audio);
+        nextVoiceChat.useMicrophone(audio.microphoneTrack());
+        nextVoiceChat.start();
+        voiceChatRef.current = nextVoiceChat;
+        setVoiceChat(nextVoiceChat);
+      }
       if (selectedPack !== "mixed" && !join)
         await nextGame.command({
           type: "settings",
           category: selectedPack,
-          rounds: DEFAULT_ROUNDS,
+          rounds: nextGame.state!.settings.rounds,
         });
     } catch (failure) {
       setError(
@@ -322,12 +346,18 @@ export default function Party() {
     if (!(await enableMic())) return;
     await audio.unlock();
     setIsMicConfirmed(true);
-    await game?.command({ type: "ready", ready: true });
+    await readyAndStartWhenSolo();
   }
 
   async function passMicCheck() {
     setIsMicConfirmed(true);
+    await readyAndStartWhenSolo();
+  }
+
+  // Alone there is nobody to wait for, so readying up starts the match.
+  async function readyAndStartWhenSolo() {
     await game?.command({ type: "ready", ready: true });
+    if (isSolo) await game?.command({ type: "start" });
   }
 
   async function toggleChatMic() {
@@ -502,7 +532,7 @@ export default function Party() {
                   <button
                     className={isInvited ? "secondary" : "primary"}
                     disabled={busy}
-                    onClick={() => void connect(false)}
+                    onClick={() => void connect("create")}
                   >
                     {busy ? "Connecting…" : "Create a party"} <span>↗</span>
                   </button>
@@ -519,18 +549,25 @@ export default function Party() {
                         setJoinCode(event.target.value.toUpperCase())
                       }
                       onKeyDown={(event) => {
-                        if (event.key === "Enter") void connect(true);
+                        if (event.key === "Enter") void connect("join");
                       }}
                       autoCapitalize="characters"
                     />
                     <button
                       className={isInvited ? "primary" : "secondary"}
                       disabled={busy}
-                      onClick={() => void connect(true)}
+                      onClick={() => void connect("join")}
                     >
                       Join party
                     </button>
                   </div>
+                  <button
+                    className="secondary"
+                    disabled={busy}
+                    onClick={() => void connect("solo")}
+                  >
+                    <MicIcon /> Play solo · just you and the mic
+                  </button>
                   <p className="mode-label">
                     {mode === "online"
                       ? "Private online rooms · Powered by Supabase"
@@ -577,51 +614,60 @@ export default function Party() {
             <div className="room-heading">
               <div>
                 <p className="muted">
-                  {mode === "tabs"
-                    ? "Local tab test · same browser only"
-                    : "Private online party"}
+                  {isSolo
+                    ? "Solo · just you and the mic"
+                    : mode === "tabs"
+                      ? "Local tab test · same browser only"
+                      : "Private online party"}
                 </p>
                 <h1>
                   {room.phase === "LOBBY"
-                    ? "കൂട്ടുകാർ റെഡിയാണോ?"
+                    ? isSolo
+                      ? "ഒറ്റയ്ക്ക് ഒരു കൈ നോക്കാം!"
+                      : "കൂട്ടുകാർ റെഡിയാണോ?"
                     : room.phase === "FINISHED"
                       ? "ചിരിയുടെ ചാമ്പ്യൻ!"
                       : `Round ${room.round} of ${room.settings.rounds}`}
                 </h1>
               </div>
               <div className="invite-actions">
-                <button
-                  className="room-code"
-                  onClick={() => void copyInvite()}
-                  title="Copy invitation"
-                >
-                  {room.code} <CopyIcon />
-                </button>
-                <button
-                  className={`voice-button ${isChatMicSwitchedOn ? "on" : ""} ${
-                    isChatMicSwitchedOn && !isChatMicOpen ? "paused" : ""
-                  }`}
-                  aria-pressed={isChatMicSwitchedOn}
-                  aria-label={isChatMicSwitchedOn ? "Mute my mic" : "Unmute my mic"}
-                  title={
-                    !isChatMicSwitchedOn
-                      ? "Voice chat: your mic is muted"
-                      : isChatMicOpen
-                        ? "Voice chat: your mic is on"
-                        : "Voice chat pauses while everyone records"
-                  }
-                  onClick={() => void toggleChatMic()}
-                >
-                  {isChatMicSwitchedOn ? <MicIcon /> : <MicOffIcon />}
-                </button>
-                <button
-                  className="voice-button"
-                  aria-label="Voice chat volumes"
-                  title="Voice chat volumes"
-                  onClick={() => setDialog("voices")}
-                >
-                  <SpeakerIcon />
-                </button>
+                {/* Solo rooms have no invitation and no voice chat. */}
+                {!isSolo && (
+                  <>
+                    <button
+                      className="room-code"
+                      onClick={() => void copyInvite()}
+                      title="Copy invitation"
+                    >
+                      {room.code} <CopyIcon />
+                    </button>
+                    <button
+                      className={`voice-button ${isChatMicSwitchedOn ? "on" : ""} ${
+                        isChatMicSwitchedOn && !isChatMicOpen ? "paused" : ""
+                      }`}
+                      aria-pressed={isChatMicSwitchedOn}
+                      aria-label={isChatMicSwitchedOn ? "Mute my mic" : "Unmute my mic"}
+                      title={
+                        !isChatMicSwitchedOn
+                          ? "Voice chat: your mic is muted"
+                          : isChatMicOpen
+                            ? "Voice chat: your mic is on"
+                            : "Voice chat pauses while everyone records"
+                      }
+                      onClick={() => void toggleChatMic()}
+                    >
+                      {isChatMicSwitchedOn ? <MicIcon /> : <MicOffIcon />}
+                    </button>
+                    <button
+                      className="voice-button"
+                      aria-label="Voice chat volumes"
+                      title="Voice chat volumes"
+                      onClick={() => setDialog("voices")}
+                    >
+                      <SpeakerIcon />
+                    </button>
+                  </>
+                )}
                 <button
                   className="secondary compact"
                   onClick={() => void leave()}
@@ -697,8 +743,9 @@ export default function Party() {
                   {micReady ? "Microphone connected" : "Test your microphone"}
                 </button>
                 <p className="privacy-note">
-                  Your gang can hear your takes. Online clips expire after 24
-                  hours when retention is configured.
+                  {isSolo
+                    ? "Solo takes stay on this device and are gone when you leave."
+                    : "Your gang can hear your takes. Online clips expire after 24 hours when retention is configured."}
                 </p>
               </aside>
               <section className="game-panel" aria-label="Party stage">
@@ -712,11 +759,15 @@ export default function Party() {
                       />
                     </div>
                     <div className="lobby-content">
-                      <h2>One mic. Many questionable talents.</h2>
+                      <h2>
+                        {isSolo ? "Just you and the mic." : "One mic. Many questionable talents."}
+                      </h2>
                       <p>
-                        {game.isHost
-                          ? "Pick a pack, invite your friends, and get everyone ready."
-                          : `${host?.name ?? "Your host"} is putting the party together.`}
+                        {isSolo
+                          ? "Pick a pack and how many rounds, then start. Your takes stay on this device."
+                          : game.isHost
+                            ? "Pick a pack, invite your friends, and get everyone ready."
+                            : `${host?.name ?? "Your host"} is putting the party together.`}
                       </p>
                       <div className="match-options">
                         <label>
@@ -751,15 +802,25 @@ export default function Party() {
                         />
                       )}
                       <div className="lobby-buttons">
-                        <button
-                          className={me?.ready ? "secondary" : "primary"}
-                          onClick={() => void readyUp()}
-                        >
-                          {me?.ready
-                            ? "Ready · Change my mind"
-                            : "Ready up"}
-                        </button>
-                        {game.isHost && (
+                        {isSolo ? (
+                          <button
+                            className="primary"
+                            disabled={room.settings.category === "custom" && room.customClips.length === 0}
+                            onClick={() => void readyUp()}
+                          >
+                            Start ↗
+                          </button>
+                        ) : (
+                          <button
+                            className={me?.ready ? "secondary" : "primary"}
+                            onClick={() => void readyUp()}
+                          >
+                            {me?.ready
+                              ? "Ready · Change my mind"
+                              : "Ready up"}
+                          </button>
+                        )}
+                        {game.isHost && !isSolo && (
                           <button
                             className="primary"
                             disabled={!canStart(room)}
@@ -769,7 +830,7 @@ export default function Party() {
                           </button>
                         )}
                       </div>
-                      {!canStart(room) && (
+                      {!canStart(room) && !isSolo && (
                         <p className="muted">
                           {connectedPlayers.length < 2
                             ? "Invite at least one friend to start."
@@ -832,7 +893,8 @@ export default function Party() {
                                 {room.playbackIndex + 1} of {room.submissions.length}
                               </span>
                             )}
-                            {currentTake && (
+                            {/* Only other players' laughs and tomatoes count, so solo has none. */}
+                            {currentTake && !isSolo && (
                               <span className="crowd-count" aria-live="polite">
                                 😂 {currentTake.reactionCount} · 🍅 {currentTake.tomatoes}
                               </span>

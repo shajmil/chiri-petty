@@ -4,6 +4,7 @@ import {
   acceptSubmission,
   awardRound,
   canStart,
+  isSoloRoom,
   createPlayer,
   recordingWindowSeconds,
   singingWindowSeconds,
@@ -35,6 +36,16 @@ test("starting requires two connected, ready players", () => {
   assert.equal(canStart(room), false);
   room.players[1].connected = false;
   assert.equal(canStart(room), false);
+});
+
+test("a solo room starts with its one ready player", () => {
+  const room = createRoom("SOLOROOM", createPlayer("solo", "Anu", 0, 1000));
+  room.settings.maxPlayers = 1;
+  assert.equal(isSoloRoom(room), true);
+  assert.equal(canStart(room), false);
+  room.players[0].ready = true;
+  assert.equal(canStart(room), true);
+  assert.equal(isSoloRoom(match()), false);
 });
 
 test("one submission per player; reject wrong round, sender, deadline and invalid score", () => {

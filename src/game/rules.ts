@@ -10,6 +10,8 @@ import type {
 export const UPLOAD_GRACE_MS = 12000;
 export const ROUND_CHOICES = [2, 3, 5, 7, 10];
 export const DEFAULT_ROUNDS = 7;
+// A solo try is short, like a quick warm-up.
+export const SOLO_ROUNDS = 3;
 export const CUSTOM_CLIP_LIMIT = 12;
 export const CUSTOM_CLIP_MIN_SECONDS = 0.5;
 export const CUSTOM_CLIP_MAX_SECONDS = 6;
@@ -89,12 +91,18 @@ export function canStart(room: RoomState): boolean {
   const players = room.players.filter((player) => player.connected);
   const hasClips =
     room.settings.category !== "custom" || room.customClips.length > 0;
+  // A party needs two players; a solo room has space for one, who can start alone.
+  const playersNeeded = Math.min(2, room.settings.maxPlayers);
   return (
     room.phase === "LOBBY" &&
     hasClips &&
-    players.length >= 2 &&
+    players.length >= playersNeeded &&
     players.every((player) => player.ready)
   );
+}
+
+export function isSoloRoom(room: RoomState): boolean {
+  return room.settings.maxPlayers === 1;
 }
 
 export function createCustomClip(

@@ -393,6 +393,31 @@ test("players talk on live voice chat, can turn each other down and mute their o
   expect(errors).toEqual([]);
 });
 
+test("one player plays solo from the home screen, with no invitation or voice chat", async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  // Solo play stays on this device, so it works in the default online mode without any setup.
+  await openParty(page, "/");
+  await page.getByLabel("What should we call you?").fill("Anu");
+  await page.getByRole("button", { name: "Play solo · just you and the mic" }).click();
+  await expect(page.locator(".room-heading")).toContainText("Solo · just you and the mic");
+  await expect(page.locator(".room-code")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Voice chat volumes" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tomato" })).toHaveCount(0);
+  await page.getByLabel("Rounds", { exact: true }).selectOption("2");
+  await page.getByRole("button", { name: "Start ↗" }).click();
+  await page.getByRole("button", { name: "Yes, I’m ready" }).click();
+
+  await expect(page.locator(".phase-label")).toHaveText("Recording live", { timeout: 30000 });
+  await expect(page.locator(".performer-line")).toContainText("1 of 1", { timeout: 30000 });
+  await expect(page.locator(".round-score")).toHaveCount(1, { timeout: 30000 });
+  await expect(page.locator(".round-score")).toContainText(/\d+\s*\/100/);
+  await expect(page.locator(".results")).toBeVisible({ timeout: 90000 });
+  expect(errors).toEqual([]);
+});
+
 test("an invitation link puts joining first, with no scrolling on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openParty(page, "/?mode=tabs&room=ABCDEFGH");
