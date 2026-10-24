@@ -7,7 +7,7 @@ import "@fontsource/anek-malayalam/malayalam-600.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Chiri Petty — കൂട്ടുകാരുടെ ശബ്ദക്കളി",
+  title: "Chiri Party — കൂട്ടുകാരുടെ ശബ്ദക്കളി",
   description:
     "A Malayalam voice party. Listen, imitate, laugh, repeat. Original sound packs and private rooms for friends.",
 };

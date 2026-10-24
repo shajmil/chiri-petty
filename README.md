@@ -1,4 +1,4 @@
-# Chiri Petty · ചിരി പെട്ടി
+# Chiri Party · ചിരി പാർട്ടി
 
 A browser voice party for 2–8 friends. Built with **Next.js static export, TypeScript, Three.js, Web Audio and Supabase**. There is no custom Node.js backend, API route, AI service or application server. Node.js is used for development and building, as Vite is in the studied Kochi project.
 
@@ -86,7 +86,7 @@ Run `node scripts/import-library.mjs` to rebuild it (needs network access and Ed
 
 ### Malayalam movie-style voices
 
-Movie and meme clips from sites such as Myinstants or Voicemod Tuna are film rips without a licence, and those sites' terms allow only personal, non-commercial use. They are **not bundled**. Chiri Petty offers two routes instead:
+Movie and meme clips from sites such as Myinstants or Voicemod Tuna are film rips without a licence, and those sites' terms allow only personal, non-commercial use. They are **not bundled**. Chiri Party offers two routes instead:
 
 1. **Original Mimicry pack (ships with the game).** src/game/mimicry.json holds 18 original meme-style lines (Ayyooo!, Shivaneee!, Manasilaayo?, Kunjimone…) with Malayalam script, meaning and delivery notes. A line becomes playable only after a real performance is imported:
    1. Record each line with any voice recorder. Keep each take short (under 4.5 seconds) and match the delivery note.

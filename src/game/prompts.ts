@@ -30,8 +30,8 @@ const libraryClips = libraryJson as LibraryClip[];
 const mimicryLines: MimicryLine[] = mimicryJson;
 
 export const BRAND = {
-  name: "Chiri Petty",
-  malayalam: "ചിരി പെട്ടി",
+  name: "Chiri Party",
+  malayalam: "ചിരി പാർട്ടി",
   tagline: "ഒന്ന് അനുകരിക്കൂ. പിന്നെ ചിരിക്കൂ.",
 };
 
