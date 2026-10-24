@@ -16,7 +16,7 @@ const recordedMimicry = MIMICRY_LINES.filter((line) => line.duration !== null);
 
 test("every library clip is a short, normalized, traceable WAV", () => {
   assert.equal(PROMPTS.length, library.filter(clip => clip.world !== "music").length + recordedMimicry.length);
-  assert.equal(PROMPTS.filter(clip => clip.category === "malayalam-movies").length, 10);
+  assert.equal(PROMPTS.filter(clip => clip.category === "malayalam-movies").length, 18);
   assert.ok(!PROMPTS.some(clip => clip.category === "music"));
   assert.equal(new Set(library.map((clip) => clip.id)).size, library.length);
   const scorer = new AcousticScorer();

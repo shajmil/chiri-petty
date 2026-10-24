@@ -31,10 +31,20 @@ const JIMMY = '/src/soundfiles/sounds';
 const LOCAL_FOLDER = 'malayalam-memes';
 const MYINSTANTS = 'https://www.myinstants.com/en/instant';
 
-// [id, source, path, world, title, phrase to imitate, difficulty]
+// [id, source, path, world, title, phrase to imitate, difficulty, seconds to keep]
+// The last value is optional: some sources carry more after the phrase, such as background
+// music or another line, so only the first seconds of sound are kept.
 // For local clips the path is the page the file came from, recorded as its source.
 // Left out for a family audience: fuckin-flavour, verpiss-dik, angela-merkel-du-fresse, canabis-reicht-nicht.
 const CLIPS = [
+  ['shivaneee', 'local', `${MYINSTANTS}/shivaneee-5619/`, 'malayalam-movies', 'Shivaneee', 'Shivaneee!', 'easy'],
+  ['basil-joseph-laugh-2', 'local', `${MYINSTANTS}/basil-joseph-laughing-version-2-83704/`, 'malayalam-movies', 'Basil Joseph Laughing 2', 'ha-ha-ha!', 'hard'],
+  ['damu-entho-engane', 'local', `${MYINSTANTS}/dhamu-entho-engane-67411/`, 'malayalam-movies', 'Damu: Entho Engane', 'Entho engane', 'normal'],
+  ['damu-ormipikkalle', 'local', `${MYINSTANTS}/dhamu-ormipikkalle-49584/`, 'malayalam-movies', 'Damu: Ormipikkalle', 'Ormipikkalle', 'normal'],
+  ['yashodaa-jagathy', 'local', `${MYINSTANTS}/yashodaa-jagathy-83436/`, 'malayalam-movies', 'Yashodaa (Jagathy)', 'Yashodaa!', 'easy', 2.2],
+  ['vayasukalathe-poothikal', 'local', `${MYINSTANTS}/vayasukalathe-oro-poothikal-98697/`, 'malayalam-movies', 'Vayasukalathe Oro Poothikal', 'Vayasukalathe oro poothikal', 'hard', 3.5],
+  ['numma-kanichu-tharam', 'local', `${MYINSTANTS}/ithokke-enthe-numma-kanichu-tharam-23915/`, 'malayalam-movies', 'Numma Kanichu Tharam', 'Ithokke enthe numma kanichu tharam', 'hard', 3.43],
+  ['itha-njangalde-plan', 'local', `${MYINSTANTS}/itha-njagalde-plan-lal-99180/`, 'malayalam-movies', 'Itha Njangalde Plan (Lal)', 'Itha njangalde plan', 'normal'],
   ['avante-montha', 'local', `${MYINSTANTS}/avante-montha-14511/`, 'malayalam-movies', 'Avante Montha', 'Avante montha', 'normal'],
   ['ayyo-enta-amma-damu', 'local', `${MYINSTANTS}/ayyo-enta-am-malayalam-damu-37333/`, 'malayalam-movies', 'Ayyo Enta Amma (Damu)', 'Ayyo enta amma!', 'easy'],
   ['namaskaar-damu', 'local', `${MYINSTANTS}/namaskaar-malayalam-damu-14192/`, 'malayalam-movies', 'Namaskaar (Damu)', 'Namaskaar', 'easy'],
@@ -279,7 +289,7 @@ const browser = await chromium.launch({ executablePath: process.env.BROWSER_PATH
 const page = await browser.newPage();
 const library = [];
 try {
-  for (const [id, source, path, world, title, phrase, difficulty] of CLIPS) {
+  for (const [id, source, path, world, title, phrase, difficulty, secondsToKeep = MAX_SECONDS] of CLIPS) {
     const outputPath = `${OUTPUT_FOLDER}/${id}.wav`;
     const localFile = source === 'local' ? findLocalFile(id) : null;
     if (source === 'local' && !localFile) {
@@ -322,7 +332,7 @@ try {
         clip[i] *= (fade * 0.89) / clipPeak;
       }
       return Array.from(clip);
-    }, { encoded: sourceBytes.toString('base64'), maxSeconds: MAX_SECONDS, sampleRate: SAMPLE_RATE }).catch(error => {
+    }, { encoded: sourceBytes.toString('base64'), maxSeconds: Math.min(secondsToKeep, MAX_SECONDS), sampleRate: SAMPLE_RATE }).catch(error => {
       console.warn(`${id}: could not decode (${error.message.split('\n')[0]}), skipped.`);
       return null;
     });
