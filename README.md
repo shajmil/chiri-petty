@@ -18,7 +18,7 @@ Without Supabase, use **Try the microphone first** for solo recording/scoring, o
 ## Online rooms on separate devices
 
 1. Create a Supabase project. In Authentication → Providers, enable anonymous sign-ins. For a public launch, configure abuse controls/CAPTCHA appropriate to the project; the prototype uses Supabase's configured anonymous-auth rate limits.
-2. Run `supabase/migrations/001_party.sql` in the SQL editor once. It creates room/member tables, transactional room creation/join/recovery functions, member-only Realtime policies and a private 2 MB recording bucket. Then run `supabase/migrations/003_room_clips.sql` so hosts can upload room clips.
+2. Run `supabase/migrations/001_party.sql` in the SQL editor once. It creates room/member tables, transactional room creation/join/recovery functions, member-only Realtime policies and a private 2 MB recording bucket. Then run `supabase/migrations/003_room_clips.sql` so hosts can upload room clips, and `supabase/migrations/004_room_limit.sql` so the room limit only counts rooms a guest is actually hosting.
 3. In Realtime settings, **disable public channel access**. The app joins private `party:CODE` channels.
 4. Copy `.env.example` to `.env.local` and enter the project's URL and public publishable/anon key:
 
