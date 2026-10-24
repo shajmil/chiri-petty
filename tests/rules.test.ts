@@ -6,6 +6,7 @@ import {
   canStart,
   createPlayer,
   recordingWindowSeconds,
+  singingWindowSeconds,
   createRoom,
   createCustomClip,
   CUSTOM_CLIP_LIMIT,
@@ -47,6 +48,7 @@ test("one submission per player; reject wrong round, sender, deadline and invali
     playerId: "host",
     roundId: "round",
     duration: 5,
+    startOffset: 0,
     path: null,
     score: { ...unavailableScore("test"), overall: 75 },
     reactionCount: 0,
@@ -90,6 +92,7 @@ test("round points equal the take score and are awarded only once", () => {
     playerId: "host",
     roundId: "",
     duration: 2,
+    startOffset: 0,
     path: null,
     score: { ...unavailableScore("test"), overall: 70 },
     reactionCount: 0,
@@ -102,10 +105,12 @@ test("round points equal the take score and are awarded only once", () => {
   assert.equal(room.results.length, 1);
 });
 
-test("the recording window is the clip length plus half a second", () => {
-  assert.equal(recordingWindowSeconds(1.0), 1.5);
-  assert.equal(recordingWindowSeconds(0.39), 0.9);
-  assert.equal(recordingWindowSeconds(4.5), 5);
+test("players get the clip length plus half a second to sing, after a one second lead-in", () => {
+  assert.equal(singingWindowSeconds(1.0), 1.5);
+  assert.equal(singingWindowSeconds(0.39), 0.9);
+  assert.equal(singingWindowSeconds(4.5), 5);
+  // The recorder starts a second before the lyrics.
+  assert.equal(recordingWindowSeconds(1.0), 2.5);
 });
 
 test("only the host adds valid room clips in the lobby; custom pack needs a clip", () => {
@@ -147,6 +152,7 @@ function performance(room: ReturnType<typeof match>) {
       playerId: "host",
       roundId: room.roundId,
       duration: 2,
+      startOffset: 0,
       path: null,
       score: unavailableScore("test"),
       reactionCount: 0,

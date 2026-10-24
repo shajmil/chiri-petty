@@ -16,8 +16,9 @@ import {
 import {
   canStart,
   DEFAULT_ROUNDS,
-  recordingWindowSeconds,
+  RECORDING_LEAD_IN_SECONDS,
   ROUND_CHOICES,
+  singingWindowSeconds,
   voiceChatVolume,
 } from "../game/rules";
 import type { AudioScore, Category, Player, RoomState } from "../game/types";
@@ -153,14 +154,17 @@ export default function Party() {
   }
   const currentPack = PACKS.find((pack) => pack.id === prompt?.category);
   const isCountingIn = room?.phase === "RECORDING" && countdown > 0;
-  const recordElapsed = room ? (now - room.recordAt) / 1000 : 0;
-  const [headline, subline] =
-    room && prompt ? promptHeadline(room, prompt.title, prompt.cue) : ["", ""];
+  // The recorder starts after 3-2-1; the lyrics and the clock start after a short lead-in.
+  const singAt = room ? room.recordAt + RECORDING_LEAD_IN_SECONDS * 1000 : 0;
+  const isLeadIn = isRecordingLive && now < singAt;
+  const singElapsed = Math.max(0, (now - singAt) / 1000);
+  const singSeconds = room ? Math.round((room.recordSeconds - RECORDING_LEAD_IN_SECONDS) * 10) / 10 : 0;
+  const promptHintText = room ? promptHint(room) : "";
   const shapeTimeline: ShapeTimeline | null =
     room?.phase === "LISTENING" && game?.referenceStartedAt && prompt
       ? { startAt: game.referenceStartedAt, durationSeconds: prompt.duration }
       : isRecordingLive && prompt
-        ? { startAt: room.recordAt, durationSeconds: prompt.duration }
+        ? { startAt: singAt, durationSeconds: prompt.duration }
         : null;
 
   const homeScene: StageScene = {
@@ -594,10 +598,18 @@ export default function Party() {
                   {room.code} <CopyIcon />
                 </button>
                 <button
-                  className={`voice-button ${isChatMicSwitchedOn ? "on" : ""}`}
+                  className={`voice-button ${isChatMicSwitchedOn ? "on" : ""} ${
+                    isChatMicSwitchedOn && !isChatMicOpen ? "paused" : ""
+                  }`}
                   aria-pressed={isChatMicSwitchedOn}
                   aria-label={isChatMicSwitchedOn ? "Mute my mic" : "Unmute my mic"}
-                  title={isChatMicSwitchedOn ? "Voice chat: your mic is on" : "Voice chat: your mic is muted"}
+                  title={
+                    !isChatMicSwitchedOn
+                      ? "Voice chat: your mic is muted"
+                      : isChatMicOpen
+                        ? "Voice chat: your mic is on"
+                        : "Voice chat pauses while everyone records"
+                  }
                   onClick={() => void toggleChatMic()}
                 >
                   {isChatMicSwitchedOn ? <MicIcon /> : <MicOffIcon />}
@@ -810,73 +822,39 @@ export default function Party() {
                         <span className="countdown-small">{remaining}s</span>
                       </div>
                       {room.phase === "SCORING" ? (
-                        <div className="score-screen">
-                          <h2>Sound familiar?</h2>
-                          <p>
-                            Acoustic resemblance, with a side of friendly
-                            competition.
-                          </p>
-                          {room.players.map((player) => {
-                            const submission = room.submissions.find(
-                              (entry) => entry.playerId === player.id,
-                            );
-                            return (
-                              <div className="score-row" key={player.id}>
-                                <Avatar index={player.avatar} />
-                                <div>
-                                  <strong>{player.name}</strong>
-                                  <small>
-                                    {submission?.score.reason ??
-                                      "No take received before the deadline."}
-                                  </small>
-                                </div>
-                                <strong>
-                                  {submission?.score.overall ?? "—"}
-                                  <small>/100</small>
-                                </strong>
-                              </div>
-                            );
-                          })}
-                          <p className="scoring-note">
-                            Local acoustic v1 · compares rhythm, envelope, pitch
-                            and texture. Scores can be manipulated by a modified
-                            client.
-                          </p>
-                        </div>
+                        <RoundScores room={room} />
                       ) : room.phase === "PLAYBACK" ? (
                         <div className="playback-screen">
-                          <p className="muted">
-                            Performance{" "}
-                            {Math.min(
-                              room.playbackIndex + 1,
-                              room.submissions.length,
-                            )}{" "}
-                            of {room.submissions.length}
-                          </p>
-                          <h2>{currentPerformer?.name ?? "No takes this round"}</h2>
-                          <div className="performance-row">
-                            <p className="performance-status" role="status">
-                              {!currentTake
-                                ? "Nobody made it to the mic."
-                                : !isPerforming
-                                  ? "Walking up to the mic…"
-                                  : !isScoreRevealed
-                                    ? "Performing · one take, no regrets"
-                                    : "And the score is…"}
-                            </p>
+                          <div className="performer-line">
+                            <strong>{currentPerformer?.name ?? "No takes this round"}</strong>
                             {currentTake && (
-                              <p className="crowd-count" aria-live="polite">
-                                😂 {currentTake.reactionCount} · 🍅{" "}
-                                {currentTake.tomatoes}
-                              </p>
+                              <span>
+                                {room.playbackIndex + 1} of {room.submissions.length}
+                              </span>
                             )}
-                            <button
-                              className="audio-unlock"
-                              onClick={() => void audio.unlock()}
-                            >
-                              🔈 Can’t hear it? Tap
-                            </button>
+                            {currentTake && (
+                              <span className="crowd-count" aria-live="polite">
+                                😂 {currentTake.reactionCount} · 🍅 {currentTake.tomatoes}
+                              </span>
+                            )}
+                            {currentTake && isScoreRevealed && (
+                              <ScoreBadge score={currentTake.score} />
+                            )}
                           </div>
+                          <p className="performance-status sr-only" role="status">
+                            {!currentTake
+                              ? "Nobody made it to the mic."
+                              : !isPerforming
+                                ? "Walking up to the mic…"
+                                : !isScoreRevealed
+                                  ? "Performing · one take, no regrets"
+                                  : "And the score is…"}
+                          </p>
+                          {audio.isLocked && (
+                            <button className="audio-unlock" onClick={() => void audio.unlock()}>
+                              🔈 Tap to hear the performances
+                            </button>
+                          )}
                           {prompt && currentTake && isPerforming && !isScoreRevealed && (
                             <LyricsTrack
                               cue={prompt.cue}
@@ -886,41 +864,23 @@ export default function Party() {
                               clock={gameClock}
                             />
                           )}
-                          {currentTake && isScoreRevealed && (
-                            <ScoreCard score={currentTake.score} />
-                          )}
                         </div>
                       ) : (
                         <div className="prompt-screen">
                           {prompt && (
-                            <div className="challenge-card">
-                              <p className="challenge-world">
-                                {currentPack?.symbol} {currentPack?.name}
-                                {prompt.difficulty && (
-                                  <span className={`difficulty ${prompt.difficulty}`}>
-                                    {prompt.difficulty}
-                                  </span>
-                                )}
-                              </p>
+                            <p className="clip-line">
+                              <span aria-hidden="true">{currentPack?.symbol}</span>
                               <strong>{prompt.title}</strong>
                               <span>
-                                {prompt.duration.toFixed(1)}s clip · your take{" "}
-                                {recordingWindowSeconds(prompt.duration)}s
-                                {prompt.referenceKind === "custom"
-                                  ? " · host’s private clip"
-                                  : ""}
+                                {singingWindowSeconds(prompt.duration)}s
+                                {prompt.referenceKind === "custom" ? " · host’s private clip" : ""}
                               </span>
-                            </div>
+                            </p>
                           )}
-                          {!isRecordingLive && (
-                            <>
-                              <h2 className="prompt-headline">{headline}</h2>
-                              <p className="prompt-subline">{subline}</p>
-                            </>
-                          )}
-                          {isCountingIn && (
-                            <strong key={countdown} className="count-in">
-                              {countdown}
+                          {!isRecordingLive && <p className="prompt-hint">{promptHintText}</p>}
+                          {(isCountingIn || isLeadIn) && (
+                            <strong key={isLeadIn ? "go" : countdown} className="count-in">
+                              {isLeadIn ? "Go!" : countdown}
                             </strong>
                           )}
                           {prompt &&
@@ -934,7 +894,7 @@ export default function Party() {
                                   room.phase === "LISTENING"
                                     ? game.referenceStartedAt || null
                                     : isRecordingLive
-                                      ? room.recordAt
+                                      ? singAt
                                       : null
                                 }
                                 clock={gameClock}
@@ -950,19 +910,19 @@ export default function Party() {
                                 role="progressbar"
                                 aria-label="Recording time"
                                 aria-valuemin={0}
-                                aria-valuemax={room.recordSeconds}
-                                aria-valuenow={Math.min(room.recordSeconds, recordElapsed)}
+                                aria-valuemax={singSeconds}
+                                aria-valuenow={Math.min(singSeconds, singElapsed)}
                               >
                                 <span
                                   style={{
-                                    width: `${Math.min(100, (recordElapsed / room.recordSeconds) * 100)}%`,
+                                    width: `${Math.min(100, (singElapsed / singSeconds) * 100)}%`,
                                   }}
                                 />
                               </div>
                               <span className="record-time">
-                                {Math.min(room.recordSeconds, recordElapsed).toFixed(1)}s
+                                {Math.min(singSeconds, singElapsed).toFixed(1)}s
                                 {" / "}
-                                {room.recordSeconds}s
+                                {singSeconds}s
                               </span>
                               <div
                                 className="audio-meter"
@@ -1508,69 +1468,89 @@ function roundWinnerId(room: RoomState): string {
   return winnerId;
 }
 
-function promptHeadline(
-  room: RoomState,
-  title: string,
-  cue: string,
-): [string, string] {
+function promptHint(room: RoomState): string {
   switch (room.phase) {
     case "ANNOUNCING":
-      return [`Up next · ${title}`, "Listen once, then copy it in one take."];
+      return "Listen once, then copy it in one take.";
     case "LISTENING":
-      return [`Now playing · ${title}`, `Copy “${cue}”. Follow the lyrics.`];
+      return "Listen closely and follow the lyrics.";
     case "RECORDING":
-      // While recording live the lyrics and REC panel replace the headline.
-      return [`Get ready for “${cue}”`, `Your recording stops after ${room.recordSeconds}s.`];
+      return "Copy it when the lyrics start.";
     case "SUBMISSION_LOCK":
-      return ["Takes are coming in", "Waiting for everyone’s recording…"];
+      return "Waiting for everyone’s take…";
     default:
-      return ["Next sound coming up…", ""];
+      return "Next sound coming up…";
   }
 }
 
 const SCORE_FEATURES: [keyof AudioScore["features"], string][] = [
-  ["onsets", "Timing"],
-  ["pitch", "Melody"],
-  ["envelope", "Energy"],
-  ["spectrum", "Texture"],
-  ["duration", "Length"],
+  ["rhythm", "Rhythm"],
+  ["melody", "Melody"],
+  ["energy", "Energy"],
+  ["texture", "Texture"],
 ];
 
-function ScoreCard({ score }: { score: AudioScore }) {
+function ScoreBadge({ score }: { score: AudioScore }) {
   return (
-    <div className="score-reveal">
-      <p className="score-card-label">
-        Score
-        <span>
-          {score.reliability === "good"
-            ? "Confidence high"
-            : score.reliability === "low"
-              ? "Confidence low"
-              : "No score"}
-        </span>
-      </p>
-      <strong>
-        {score.overall ?? "—"}
+    <details className={`score-badge ${score.reliability}`}>
+      <summary aria-label={`Score ${score.overall ?? "unavailable"} out of 100`}>
+        <strong>{score.overall ?? "—"}</strong>
         <small>/100</small>
-      </strong>
-      {score.overall !== null && (
-        <details className="score-details"><summary>Score details</summary><ul className="feature-bars">
-          {SCORE_FEATURES.map(([key, label]) => {
-            const value = score.features[key];
-            if (value === null) return null;
-            return (
-              <li key={key}>
-                <span>{label}</span>
-                <span className="feature-bar">
-                  <span style={{ width: `${value}%` }} />
-                </span>
-                <b>{value}</b>
-              </li>
-            );
-          })}
-        </ul><small>{score.reason}</small></details>
-      )}
-    </div>
+      </summary>
+      <div className="score-badge-details">
+        {score.overall !== null && (
+          <ul className="feature-bars">
+            {SCORE_FEATURES.map(([key, label]) => {
+              const value = score.features[key];
+              if (typeof value !== "number") return null;
+              return (
+                <li key={key}>
+                  <span>{label}</span>
+                  <span className="feature-bar">
+                    <span style={{ width: `${value}%` }} />
+                  </span>
+                  <b>{value}</b>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        <small>{score.reason}</small>
+      </div>
+    </details>
+  );
+}
+
+// Scores for the round in one row, best first; a reason shows only when there is no score.
+function RoundScores({ room }: { room: RoomState }) {
+  const scores = room.players
+    .map((player) => ({
+      player,
+      score: room.submissions.find((entry) => entry.playerId === player.id)?.score ?? null,
+    }))
+    .sort((first, second) => (second.score?.overall ?? -1) - (first.score?.overall ?? -1));
+  return (
+    <ol className="round-scores" aria-label="Scores this round">
+      {scores.map(({ player, score }, index) => {
+        const isWinner = index === 0 && score?.overall != null;
+        return (
+          <li key={player.id} className={`round-score ${isWinner ? "best" : ""}`}>
+            {isWinner && <span aria-hidden="true">👑</span>}
+            <Avatar index={player.avatar} />
+            <strong>{player.name}</strong>
+            <b>
+              {score?.overall ?? "—"}
+              <small>/100</small>
+            </b>
+            {score?.overall == null && (
+              <small className="score-reason">
+                {score?.reason ?? "No take received before the deadline."}
+              </small>
+            )}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 

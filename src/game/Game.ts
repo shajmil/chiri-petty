@@ -43,7 +43,7 @@ export class Game {
   private lastBeepKey = "";
   private playbackKey = "";
   private playbackRequest = 0;
-  private pendingTake: { blob: Blob; duration: number } | null = null;
+  private pendingTake: { blob: Blob; duration: number; startOffset: number } | null = null;
   private recoveryPending = false;
   private closed = false;
   private name = "";
@@ -560,7 +560,11 @@ export class Game {
           .download(submission.path)
           .then((blob) => {
             if (request !== this.playbackRequest) return;
-            this.pendingTake = { blob, duration: submission.duration };
+            this.pendingTake = {
+              blob,
+              duration: submission.duration,
+              startOffset: submission.startOffset,
+            };
           })
           .catch((error) => this.report(error));
     }
@@ -575,7 +579,7 @@ export class Game {
       const offset = (this.now - room.playbackStartAt) / 1000;
       if (offset < take.duration)
         void this.audio
-          .playBlob(take.blob, offset)
+          .playBlob(take.blob, take.startOffset + offset)
           .catch((error) => this.report(error));
     }
   }
@@ -590,6 +594,7 @@ export class Game {
       roundId,
       path: null,
       duration: 0,
+      startOffset: 0,
       score: unavailableScore("No recording submitted."),
       reactionCount: 0,
       tomatoes: 0,
@@ -612,7 +617,8 @@ export class Game {
       const path = `${room.code}/${matchId}/${roundId}/${this.playerId}.${extension}`;
       await this.provider.upload(path, attempt.blob);
       submission.path = path;
-      submission.duration = attempt.duration;
+      submission.startOffset = attempt.startOffset;
+      submission.duration = attempt.duration - attempt.startOffset;
       submission.score = attempt.score;
       this.submissionStatus = "Take submitted. No second takes!";
     } catch (error) {

@@ -52,15 +52,15 @@ test("complete two-player, two-round match using real browser recording and loca
   });
   await page.getByRole("button", { name: "Start the chaos" }).click();
   for (let round = 1; round <= 2; round++) {
-    await expect(page.locator(".prompt-headline")).toContainText(
-      "Get ready for",
+    await expect(page.locator(".prompt-hint")).toHaveText(
+      "Copy it when the lyrics start.",
       { timeout: 35000 },
     );
     await expect(page.locator(".count-in")).toBeVisible();
     await expect(page.locator(".lyrics")).toBeVisible();
-    await expect(page.locator(".prompt-subline")).toHaveText(
-      /Your recording stops after [\d.]+s\./,
-    );
+    await expect(page.locator(".clip-line")).toContainText(/[\d.]+s/);
+    // After 3-2-1 the recorder starts with a short "Go!" before the lyrics.
+    await expect(page.locator(".count-in")).toHaveText("Go!", { timeout: 5000 });
     // Takes can be under a second, so check every animation frame rather than every poll.
     for (const player of [page, friend])
       await player.waitForFunction(
@@ -72,9 +72,7 @@ test("complete two-player, two-round match using real browser recording and loca
       "Your gang, on stage",
       { timeout: 30000 },
     );
-    await expect(page.locator(".playback-screen")).toContainText(
-      "Performance 1 of 2",
-    );
+    await expect(page.locator(".performer-line")).toContainText("1 of 2");
     if (round === 1) {
       for (const viewport of [{ width: 1440, height: 900 }, { width: 1107, height: 1172 }, { width: 390, height: 844 }]) {
         await page.setViewportSize(viewport);
@@ -90,11 +88,11 @@ test("complete two-player, two-round match using real browser recording and loca
     await expect(page.locator(".phase-label")).toHaveText("The scores are in", {
       timeout: 30000,
     });
-    await expect(page.locator(".score-row")).toHaveCount(2);
-    await expect(page.locator(".score-row").first()).not.toContainText(
+    await expect(page.locator(".round-score")).toHaveCount(2);
+    await expect(page.locator(".round-score").first()).not.toContainText(
       "No take received",
     );
-    await expect(page.locator(".score-row").first()).toContainText("/100");
+    await expect(page.locator(".round-score").first()).toContainText("/100");
   }
   await expect(page.locator(".results")).toBeVisible({ timeout: 20000 });
   await expect(friend.locator(".results")).toBeVisible();
@@ -196,11 +194,11 @@ test("a failed audio upload does not deadlock the round", async ({
     timeout: 60000,
   });
   await expect(
-    page.locator(".score-row").filter({ hasText: "Manu" }),
+    page.locator(".round-score").filter({ hasText: "Manu" }),
   ).toContainText("Simulated storage failure");
   await expect(
     page
-      .locator(".score-row")
+      .locator(".round-score")
       .filter({ has: page.getByText("Anu", { exact: true }) }),
   ).not.toContainText("No take received");
 });
@@ -223,11 +221,11 @@ test("a connected player who never submits is skipped at the deadline", async ({
     timeout: 60000,
   });
   await expect(
-    page.locator(".score-row").filter({ hasText: "Manu" }),
+    page.locator(".round-score").filter({ hasText: "Manu" }),
   ).toContainText("No take received before the deadline");
   await expect(
     page
-      .locator(".score-row")
+      .locator(".round-score")
       .filter({ has: page.getByText("Anu", { exact: true }) }),
   ).not.toContainText("No take received");
 });
@@ -271,7 +269,7 @@ test("host adds a private room clip that both players hear and imitate", async (
   await expect(page.locator(".phase-label")).toHaveText("The scores are in", {
     timeout: 60000,
   });
-  for (const row of await page.locator(".score-row").all())
+  for (const row of await page.locator(".round-score").all())
     await expect(row).toContainText(/\d+\s*\/100/);
   expect(errors).toEqual([]);
 });
@@ -292,23 +290,32 @@ test("performers take the mic one by one while the crowd reacts, throws tomatoes
   await readyUp(friend);
   await page.getByRole("button", { name: "Start the chaos" }).click();
 
-  await expect(friend.locator(".playback-screen h2")).toHaveText("Anu", { timeout: 40000 });
+  await expect(friend.locator(".performer-line > strong")).toHaveText("Anu", { timeout: 40000 });
   await expect(friend.locator(".performance-status")).toContainText("Performing", { timeout: 5000 });
-  // About three tomatoes in ten are dodged and don't count, so keep throwing until one lands.
-  await expect(async () => {
-    await friend.getByRole("button", { name: "Tomato" }).click();
-    await expect(friend.locator(".crowd-count")).toContainText("🍅 1", { timeout: 700 });
-  }).toPass({ timeout: 6000 });
-  await friend.waitForTimeout(700);
+  // The host decides which tomatoes are dodged; holding its random numbers at 0 for a moment makes this one land.
+  await page.evaluate(() => {
+    const random = Math.random;
+    Math.random = () => 0;
+    setTimeout(() => {
+      Math.random = random;
+    }, 1500);
+  });
+  await friend.getByRole("button", { name: "Tomato" }).click();
+  await expect(friend.locator(".crowd-count")).toContainText("🍅 1");
+  await friend.waitForTimeout(650);
   await friend.getByRole("button", { name: "Send Laugh emote" }).click();
   await expect(page.locator(".crowd-count")).toContainText("😂 1 · 🍅 1");
   await expect(friend.locator(".crowd-count")).toContainText("😂 1 · 🍅 1");
-  await expect(page.locator(".score-reveal")).toContainText(/\d+\s*\/100/, { timeout: 10000 });
-  await page.locator(".score-reveal summary").click();
-  await expect(page.locator(".score-reveal .feature-bars li").first()).toBeVisible();
+  await expect(page.locator(".score-badge")).toContainText(/\d+\s*\/100/, { timeout: 10000 });
+  // The score shows for only a few seconds, and a click waits for the badge's pop-in animation,
+  // which a slow test machine can stretch past the reveal, so the details are opened directly.
+  await page.locator(".score-badge").evaluate((details) => {
+    (details as HTMLDetailsElement).open = true;
+  });
+  await expect(page.locator(".score-badge .feature-bars li").first()).toBeVisible();
   await expect(page.locator(".phase-label")).toHaveText("Your gang, on stage");
 
-  await expect(page.locator(".playback-screen h2")).toHaveText("Manu", { timeout: 10000 });
+  await expect(page.locator(".performer-line > strong")).toHaveText("Manu", { timeout: 10000 });
   await expect(page.getByRole("button", { name: "Tomato" })).toBeVisible();
   await expect(friend.getByRole("button", { name: "Tomato" })).toBeVisible();
 

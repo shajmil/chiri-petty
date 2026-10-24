@@ -30,6 +30,11 @@ export class AudioManager {
   private readonly scorer = new AcousticScorer();
   private readonly references = new Map<string, AudioBuffer>();
 
+  /** True until the browser lets this page play sound, which needs a tap first on some phones. */
+  public get isLocked(): boolean {
+    return this.context?.state !== "running";
+  }
+
   public async unlock(): Promise<void> {
     this.context ??= new AudioContext({ sampleRate: 44100 });
     if (this.context.state === "suspended") await this.context.resume();
@@ -209,7 +214,8 @@ export class AudioManager {
 
   /** A short wet "splat" for a tomato landing: fading noise through a low-pass filter. */
   public splat(): void {
-    if (!this.context) return;
+    // A splat during your recording would end up in your take.
+    if (!this.context || this.recording) return;
     const context = this.context;
     const length = Math.floor(context.sampleRate * 0.18);
     const noise = context.createBuffer(1, length, context.sampleRate);
@@ -239,7 +245,7 @@ export class AudioManager {
   public async record(
     seconds: number,
     prompt: Prompt,
-  ): Promise<{ blob: Blob; duration: number; score: AudioScore }> {
+  ): Promise<{ blob: Blob; duration: number; startOffset: number; score: AudioScore }> {
     await this.enableMicrophone();
     if (this.recording) throw new Error("A recording is already in progress.");
     this.stopPlayback();
@@ -288,12 +294,14 @@ export class AudioManager {
       }
       return samples;
     };
+    const attemptSamples = mono(attempt);
     return {
       blob,
       duration: attempt.duration,
+      startOffset: quietStartSeconds(attemptSamples, attempt.sampleRate),
       score: this.scorer.compare(
         mono(reference),
-        mono(attempt),
+        attemptSamples,
         attempt.sampleRate,
         prompt.category,
       ),
@@ -317,4 +325,22 @@ export class AudioManager {
     this.context = null;
     this.playbackAnalyser = null;
   }
+}
+
+/**
+ * Seconds of quiet before the first real sound in a take (within 20 dB of its loudest moment),
+ * minus a small margin so the start of the sound is never cut.
+ */
+function quietStartSeconds(samples: Float32Array, sampleRate: number): number {
+  const windowSize = Math.max(1, Math.round(sampleRate * 0.02));
+  const levels: number[] = [];
+  for (let start = 0; start + windowSize <= samples.length; start += windowSize) {
+    let sum = 0;
+    for (let index = start; index < start + windowSize; index++) sum += samples[index] ** 2;
+    levels.push(Math.sqrt(sum / windowSize));
+  }
+  const loudest = Math.max(0, ...levels);
+  if (!loudest) return 0;
+  const firstSound = levels.findIndex((level) => level >= loudest * 0.1);
+  return Math.max(0, (firstSound * windowSize) / sampleRate - 0.15);
 }

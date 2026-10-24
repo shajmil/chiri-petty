@@ -95,7 +95,16 @@ Movie and meme clips from sites such as Myinstants or Voicemod Tuna are film rip
    Only record performances the project owns, such as your own voice or a performer who agreed in writing. Do not use AI voice clones of actors.
 2. **Your clips (private rooms).** The host picks the "Your clips" pack, chooses any audio file, trims up to 6 seconds, types what players should say and confirms they have the right to use it. The browser re-encodes just that part as a WAV and uploads it to the room's private storage path `ROOMCODE/custom/`. Only room members can play it, and it is deleted with the room. Online rooms need `supabase/migrations/003_room_clips.sql`. Clips can be added only in the lobby, up to 12 per room.
 
-Scoring is an approximate local comparison of duration, energy, pitch contour, onsets and texture. It does not understand words or judge humor. Automated checks establish file decoding and playback signal, not perceived sound quality on every device.
+Scoring runs on each player's device (`src/core/LocalAudioScorer.ts`). It trims the silence around both recordings, then lines the take up with the reference using dynamic time warping, so a late start or a slightly faster delivery does not ruin the comparison. Four parts are compared, weighted by sound world:
+
+- **Rhythm**: do the beats and syllables land in the same places once the take is stretched to the reference's length?
+- **Energy**: does it get louder and quieter at the same moments?
+- **Melody**: does the pitch rise and fall the same way? Pitch is relative, so a deep voice can copy a squeaky one. Sounds without a clear pitch skip this part.
+- **Texture**: the same sounds in the same order (vowels, hisses, squeaks), using the spectrum outline with each speaker's average removed, so a different voice is not penalised.
+
+Raw matches are spread over 0 to 100. On calibration takes (the same phrase read by a different text-to-speech voice, and library clips played back quieter, noisier, later or faster), right imitations score about 76 to 93 and perfect copies 100, while wrong words score about 12 and unrelated sounds about 17. Takes that are too quiet get no score, and clipped or noisy takes are marked as less certain. The scorer does not understand words or judge humor, and these numbers come from synthetic takes, not real players.
+
+The recorder starts straight after 3-2-1 and the lyrics follow a second later, so a quick starter is never cut off. Playback skips the silence before each take's first sound.
 
 ## Project layout
 

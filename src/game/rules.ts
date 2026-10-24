@@ -21,14 +21,16 @@ export const STAGE_EVENT_GAP_MS = 600;
 export const STAGE_EVENT_LIMIT = 30;
 // A take may run a little past the reference so players are not cut off mid-sound.
 export const RECORDING_SLACK_SECONDS = 0.5;
+// After 3-2-1 the recorder starts, and the lyrics follow a second later, so nobody's first sound is cut off.
+export const RECORDING_LEAD_IN_SECONDS = 1;
 
 export function unavailableScore(reason: string): AudioScore {
   return {
     overall: null,
     reliability: "unavailable",
     reason,
-    features: { duration: 0, envelope: 0, pitch: null, onsets: 0, spectrum: 0 },
-    method: "local-acoustic-v1",
+    features: { rhythm: 0, energy: 0, melody: null, texture: 0 },
+    method: "local-acoustic-v2",
   };
 }
 
@@ -166,7 +168,10 @@ export function acceptSubmission(
   if (
     !Number.isFinite(submission.duration) ||
     submission.duration < 0 ||
-    submission.duration > room.recordSeconds + 1
+    submission.duration > room.recordSeconds + 1 ||
+    !Number.isFinite(submission.startOffset) ||
+    submission.startOffset < 0 ||
+    submission.startOffset > room.recordSeconds
   )
     return false;
   if (
@@ -206,8 +211,14 @@ export function voiceChatVolume(phase: RoomState["phase"], isTakePlaying: boolea
   return 1;
 }
 
-export function recordingWindowSeconds(referenceSeconds: number): number {
+/** How long players have to sing, from the moment the lyrics start. */
+export function singingWindowSeconds(referenceSeconds: number): number {
   return Math.round((referenceSeconds + RECORDING_SLACK_SECONDS) * 10) / 10;
+}
+
+/** How long the recorder runs: the short lead-in, then the singing window. */
+export function recordingWindowSeconds(referenceSeconds: number): number {
+  return singingWindowSeconds(referenceSeconds) + RECORDING_LEAD_IN_SECONDS;
 }
 
 export function addStageEvent(

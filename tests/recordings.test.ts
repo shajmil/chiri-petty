@@ -38,7 +38,10 @@ test("every library clip is a short, normalized, traceable WAV", () => {
     assert.ok(peak > 0.1 && peak < 0.91, clip.id);
     if (samples.length / rate >= 0.2) {
       const world = clip.world as (typeof PROMPTS)[number]["category"];
-      assert.ok((scorer.compare(samples, samples, rate, world).overall ?? 0) >= 90, clip.id);
+      // A real take starts with a short pause before the player makes the sound.
+      const copiedTake = new Float32Array(samples.length + rate / 2);
+      copiedTake.set(samples, rate / 2);
+      assert.ok((scorer.compare(samples, copiedTake, rate, world).overall ?? 0) >= 90, clip.id);
     }
   }
   assert.ok(createDeck("mixed", 50).every((id) => PROMPTS.some((prompt) => prompt.id === id)));

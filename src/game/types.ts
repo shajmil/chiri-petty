@@ -24,14 +24,14 @@ export interface AudioScore {
   overall: number | null;
   reliability: "good" | "low" | "unavailable";
   reason: string;
+  /** Each part of the comparison from 0 to 100; melody is null when the reference has no clear pitch. */
   features: {
-    duration: number;
-    envelope: number;
-    pitch: number | null;
-    onsets: number;
-    spectrum: number;
+    rhythm: number;
+    energy: number;
+    melody: number | null;
+    texture: number;
   };
-  method: "local-acoustic-v1";
+  method: "local-acoustic-v2";
 }
 
 export interface Prompt {
@@ -64,7 +64,10 @@ export interface Submission {
   playerId: string;
   roundId: string;
   path: string | null;
+  /** Seconds of the take worth playing, from its first sound. */
   duration: number;
+  /** Seconds of silence before the first sound, which playback skips so nobody waits at the mic. */
+  startOffset: number;
   score: AudioScore;
   reactionCount: number;
   tomatoes: number;
