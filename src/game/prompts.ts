@@ -35,35 +35,114 @@ export const BRAND = {
   tagline: "ഒന്ന് അനുകരിക്കൂ. പിന്നെ ചിരിക്കൂ.",
 };
 
-export const AVATAR_COLORS = [
-  "#c6f24e",
-  "#eea68c",
-  "#b7d5e4",
-  "#e8c36f",
-  "#ddc1b0",
-  "#c3cec5",
-];
-
 export interface CharacterLook {
+  /** Shirt, blouse or dress colour, also the background of the face in menus. */
+  shirt: string;
   skin: string;
+  /** Hair colour; for a headscarf, the scarf's colour. */
   hair: string;
-  hairStyle: "classic" | "spiky" | "long" | "bun" | "curly" | "band";
-  outfit: "placket" | "patch" | "collar" | "stripes" | "straps" | "border";
+  hairStyle:
+    | "classic"
+    | "spiky"
+    | "long"
+    | "bun"
+    | "curly"
+    | "band"
+    | "ponytail"
+    | "braid"
+    | "pigtails"
+    | "bob"
+    | "mohawk"
+    | "bald"
+    | "cap"
+    | "scarf";
+  outfit:
+    | "placket"
+    | "patch"
+    | "collar"
+    | "stripes"
+    | "straps"
+    | "border"
+    | "saree"
+    | "kurta"
+    | "dress"
+    | "jacket"
+    | "tie";
+  /** Trousers, mundu, leggings or saree colour; a jacket matches it. */
   pants: string;
   shoes: string;
-  glasses: boolean;
-  moustache: boolean;
+  glasses?: boolean;
+  moustache?: boolean;
+  beard?: boolean;
+  earrings?: boolean;
+  bindi?: boolean;
+  /** A string of jasmine flowers in the hair. */
+  flower?: boolean;
 }
 
-/** One look per avatar choice; the shirt colour comes from AVATAR_COLORS. */
+/** Every player gets one of these characters; the index is the player's avatar number. */
 export const CHARACTER_LOOKS: CharacterLook[] = [
-  { skin: "#e9a56d", hair: "#241e29", hairStyle: "classic", outfit: "placket", pants: "#241e29", shoes: "#ffedc0", glasses: false, moustache: false },
-  { skin: "#c98a5a", hair: "#c9541e", hairStyle: "spiky", outfit: "patch", pants: "#2f4d7a", shoes: "#f6ba55", glasses: false, moustache: false },
-  { skin: "#8d5a3b", hair: "#1b1418", hairStyle: "long", outfit: "collar", pants: "#5b3b6e", shoes: "#ffedc0", glasses: true, moustache: false },
-  { skin: "#f1c08f", hair: "#5a3420", hairStyle: "bun", outfit: "stripes", pants: "#2e6b5c", shoes: "#e7787f", glasses: false, moustache: false },
-  { skin: "#a86b43", hair: "#2a1d17", hairStyle: "curly", outfit: "straps", pants: "#3a3a3a", shoes: "#ffffff", glasses: false, moustache: false },
-  { skin: "#d79a6a", hair: "#241e29", hairStyle: "band", outfit: "border", pants: "#f3ead2", shoes: "#7a4b2a", glasses: false, moustache: true },
+  { shirt: "#c6f24e", skin: "#e9a56d", hair: "#241e29", hairStyle: "classic", outfit: "placket", pants: "#241e29", shoes: "#ffedc0" },
+  { shirt: "#eea68c", skin: "#c98a5a", hair: "#c9541e", hairStyle: "spiky", outfit: "patch", pants: "#2f4d7a", shoes: "#f6ba55" },
+  { shirt: "#b7d5e4", skin: "#8d5a3b", hair: "#1b1418", hairStyle: "long", outfit: "collar", pants: "#5b3b6e", shoes: "#ffedc0", glasses: true, earrings: true },
+  { shirt: "#e8c36f", skin: "#f1c08f", hair: "#5a3420", hairStyle: "bun", outfit: "stripes", pants: "#2e6b5c", shoes: "#e7787f", flower: true },
+  { shirt: "#ddc1b0", skin: "#a86b43", hair: "#2a1d17", hairStyle: "curly", outfit: "straps", pants: "#3a3a3a", shoes: "#ffffff" },
+  { shirt: "#c3cec5", skin: "#d79a6a", hair: "#241e29", hairStyle: "band", outfit: "border", pants: "#f3ead2", shoes: "#7a4b2a", moustache: true },
+  { shirt: "#d94f70", skin: "#c98a5a", hair: "#1b1418", hairStyle: "long", outfit: "saree", pants: "#f4d35e", shoes: "#c9a227", bindi: true, earrings: true },
+  { shirt: "#f28cb1", skin: "#e9a56d", hair: "#2a1d17", hairStyle: "ponytail", outfit: "jacket", pants: "#3b5b8c", shoes: "#ffffff", earrings: true },
+  { shirt: "#f5e6c8", skin: "#a86b43", hair: "#2a1d17", hairStyle: "bald", outfit: "kurta", pants: "#f3ead2", shoes: "#5a3a22", glasses: true, moustache: true },
+  { shirt: "#6cc4a1", skin: "#8d5a3b", hair: "#1b1418", hairStyle: "braid", outfit: "kurta", pants: "#f6f1e1", shoes: "#d4a24c", flower: true, bindi: true, earrings: true },
+  { shirt: "#4a90d9", skin: "#c98a5a", hair: "#241e29", hairStyle: "cap", outfit: "jacket", pants: "#2b2b2b", shoes: "#e8e8e8" },
+  { shirt: "#f7a072", skin: "#f1c08f", hair: "#7a3b1e", hairStyle: "pigtails", outfit: "dress", pants: "#f6e7d7", shoes: "#e7787f" },
+  { shirt: "#8e7cc3", skin: "#d79a6a", hair: "#4caf50", hairStyle: "mohawk", outfit: "stripes", pants: "#1f1f1f", shoes: "#c6f24e" },
+  { shirt: "#5ec2b7", skin: "#a86b43", hair: "#1b1418", hairStyle: "bob", outfit: "dress", pants: "#2d2d2d", shoes: "#2d2d2d", glasses: true },
+  { shirt: "#f2efe6", skin: "#8d5a3b", hair: "#b9b4ad", hairStyle: "classic", outfit: "border", pants: "#f3ead2", shoes: "#6b4a2f", glasses: true, beard: true },
+  { shirt: "#9b5de5", skin: "#e9a56d", hair: "#2a9d8f", hairStyle: "scarf", outfit: "kurta", pants: "#f1e3d3", shoes: "#3b2a20" },
+  { shirt: "#f4a259", skin: "#6e4428", hair: "#2a1d17", hairStyle: "curly", outfit: "jacket", pants: "#354f52", shoes: "#f2f2f2", beard: true },
+  { shirt: "#e8eef7", skin: "#f1c08f", hair: "#3b2a20", hairStyle: "classic", outfit: "tie", pants: "#2f3e5c", shoes: "#3a2a1e", glasses: true },
+  { shirt: "#ffd166", skin: "#c98a5a", hair: "#7b2cbf", hairStyle: "bob", outfit: "jacket", pants: "#264653", shoes: "#ffffff" },
+  { shirt: "#2e7d32", skin: "#a86b43", hair: "#1b1418", hairStyle: "bun", outfit: "saree", pants: "#f6f1e1", shoes: "#d4a24c", flower: true, bindi: true, earrings: true },
 ];
+
+/** A random character, never the one given, so a shuffle always changes something. */
+export function randomLookIndex(except = -1): number {
+  const choices = CHARACTER_LOOKS.map((_, index) => index).filter((index) => index !== except);
+  return choices[randomInt(choices.length)];
+}
+
+/** Every character in a random order, for picking a crowd. */
+export function shuffledLookIndexes(): number[] {
+  return shuffle(CHARACTER_LOOKS.map((_, index) => index));
+}
+
+/** Funny Malayalam movie characters, offered as a name to start with. */
+export const FUNNY_NAMES = [
+  "Damu",
+  "Dikru",
+  "Manavalan",
+  "Ramanan",
+  "Pavanayi",
+  "Gafoor",
+  "Dasan",
+  "Vijayan",
+  "Dinesan",
+  "Mannar Mathai",
+  "Kittunni",
+  "Appukuttan",
+  "Shaji Pappan",
+  "Arakkal Abu",
+  "Sarbath Shameer",
+  "Ramji Rao",
+  "Kunjappan",
+  "Kumbidi",
+  "Pattalam Purushu",
+  "Kuttan Pillai",
+];
+
+export function randomFunnyName(except = ""): string {
+  const choices = FUNNY_NAMES.filter((name) => name !== except);
+  return choices[randomInt(choices.length)];
+}
 
 export const PACKS: {
   id: Category;

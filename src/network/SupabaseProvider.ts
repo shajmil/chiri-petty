@@ -61,11 +61,14 @@ export class SupabaseProvider implements RealtimeProvider {
         crypto.getRandomValues(new Uint8Array(8)),
         (value) => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[value % 32],
       ).join("");
+    // The members table still only accepts face numbers 0-5 from when there were six faces,
+    // and nothing reads it back: the real character travels in the room state.
+    const storedAvatar = avatar % 6;
     if (code) {
       const { data, error } = await this.client.rpc("join_party", {
         room_code: code,
         player_name: name.trim().slice(0, 24),
-        player_avatar: avatar,
+        player_avatar: storedAvatar,
       });
       if (error) throw new Error(error.message);
       return data as RoomState;
@@ -78,7 +81,7 @@ export class SupabaseProvider implements RealtimeProvider {
       room_code: this.code,
       initial_state: room,
       player_name: name,
-      player_avatar: avatar,
+      player_avatar: storedAvatar,
     });
     if (error) throw new Error(error.message);
     return room;

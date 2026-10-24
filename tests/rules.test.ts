@@ -16,9 +16,18 @@ import {
   STAGE_EVENT_LIMIT,
   unavailableScore,
   voiceChatVolume,
+  uniqueAvatar,
 } from "../src/game/rules";
 import type { Submission } from "../src/game/types";
-import { createDeck, findPrompt } from "../src/game/prompts";
+import {
+  CHARACTER_LOOKS,
+  createDeck,
+  findPrompt,
+  FUNNY_NAMES,
+  randomFunnyName,
+  randomLookIndex,
+  shuffledLookIndexes,
+} from "../src/game/prompts";
 
 function match() {
   const room = createRoom("ABCDEFGH", createPlayer("host", "Anu", 0, 1000));
@@ -36,6 +45,32 @@ test("starting requires two connected, ready players", () => {
   assert.equal(canStart(room), false);
   room.players[1].connected = false;
   assert.equal(canStart(room), false);
+});
+
+test("a player joining with a taken character gets the next free one", () => {
+  const room = match();
+  room.players[0].avatar = 4;
+  room.players[1].avatar = 5;
+  assert.equal(uniqueAvatar(room, 7), 7);
+  assert.equal(uniqueAvatar(room, 4), 6);
+  assert.equal(uniqueAvatar(room, CHARACTER_LOOKS.length + 4), 6);
+  assert.equal(uniqueAvatar(room, -4), 6);
+});
+
+test("there are twenty characters, many of them girls, and funny names to start with", () => {
+  assert.ok(CHARACTER_LOOKS.length >= 20);
+  const girlsHair = ["long", "bun", "ponytail", "braid", "pigtails", "bob", "scarf"];
+  assert.ok(CHARACTER_LOOKS.filter((look) => girlsHair.includes(look.hairStyle)).length >= 8);
+  assert.equal(new Set(FUNNY_NAMES).size, FUNNY_NAMES.length);
+  assert.ok(FUNNY_NAMES.every((name) => name.length >= 1 && name.length <= 24));
+  for (let attempt = 0; attempt < 50; attempt++) {
+    assert.notEqual(randomLookIndex(3), 3);
+    assert.notEqual(randomFunnyName("Damu"), "Damu");
+  }
+  assert.deepEqual(
+    [...shuffledLookIndexes()].sort((first, second) => first - second),
+    CHARACTER_LOOKS.map((_, index) => index),
+  );
 });
 
 test("a solo room starts with its one ready player", () => {

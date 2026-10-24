@@ -277,7 +277,6 @@ export class Stage {
       const isOutdated =
         !wantedIds.has(id) ||
         changed?.name !== character.actor.name ||
-        changed?.color !== character.actor.color ||
         changed?.look !== character.actor.look ||
         changed?.isYou !== character.actor.isYou;
       if (isOutdated) {

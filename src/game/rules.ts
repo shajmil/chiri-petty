@@ -6,6 +6,7 @@ import type {
   StageEventKind,
   Submission,
 } from "./types";
+import { CHARACTER_LOOKS } from "./prompts";
 
 export const UPLOAD_GRACE_MS = 12000;
 export const ROUND_CHOICES = [2, 3, 5, 7, 10];
@@ -34,6 +35,18 @@ export function unavailableScore(reason: string): AudioScore {
     features: { rhythm: 0, energy: 0, melody: null, texture: 0 },
     method: "local-acoustic-v2",
   };
+}
+
+/** Everyone in a room looks different: a character that is already taken moves on to the next free one. */
+export function uniqueAvatar(room: RoomState, wanted: number): number {
+  const count = CHARACTER_LOOKS.length;
+  const taken = new Set(room.players.map((player) => player.avatar));
+  const start = Math.abs(Math.floor(wanted)) % count;
+  for (let step = 0; step < count; step++) {
+    const candidate = (start + step) % count;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return start;
 }
 
 export function createPlayer(

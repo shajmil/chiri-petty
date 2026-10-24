@@ -5,13 +5,15 @@ import { useEffect, useReducer, useRef, useState } from "react";
 import { AudioManager } from "../core/AudioManager";
 import { Game } from "../game/Game";
 import {
-  AVATAR_COLORS,
   BRAND,
   CHARACTER_LOOKS,
   PACKS,
   PLAYABLE_PACKS,
   PROMPTS,
   findPrompt,
+  randomFunnyName,
+  randomLookIndex,
+  shuffledLookIndexes,
 } from "../game/prompts";
 import {
   canStart,
@@ -38,17 +40,10 @@ import ReactionBar from "./ReactionBar";
 import LyricsTrack from "./LyricsTrack";
 import MicCheck from "./MicCheck";
 
-const HOME_ACTORS: StageActor[] = [
-  { id: "home-left", name: "", color: "#e98763", look: 3, isYou: false },
-  { id: "home-right", name: "", color: "#b5a1d3", look: 1, isYou: false },
-  { id: "home-performer", name: "", color: "#28a49c", look: 0, isYou: false },
-];
-// Playing solo, a small crowd watches and cheers, so the stage never feels empty.
-const SOLO_CROWD: StageActor[] = [
-  { id: "crowd-left", name: "", color: "#e98763", look: 3, isYou: false },
-  { id: "crowd-right", name: "", color: "#b5a1d3", look: 1, isYou: false },
-  { id: "crowd-back", name: "", color: "#f2c14e", look: 5, isYou: false },
-];
+// Nameless extras: the home page's crowd, and the crowd that cheers a solo player.
+function crowdActors(ids: string[], looks: number[]): StageActor[] {
+  return ids.map((id, index) => ({ id, name: "", look: looks[index], isYou: false }));
+}
 type Dialog =
   | "rules"
   | "packs"
@@ -89,9 +84,13 @@ export default function Party() {
   const [deviceId, setDeviceId] = useState("");
   const [micLevel, setMicLevel] = useState(0);
   const [selectedPack, setSelectedPack] = useState<Category>("mixed");
+  // The crowd is drawn at random, so the stage looks different on every visit.
+  const [crowdLooks] = useState(shuffledLookIndexes);
 
   useEffect(() => {
-    setName(localStorage.getItem("chiri-name") ?? "");
+    // A returning player keeps their name; a new one starts as a funny movie character.
+    setName(localStorage.getItem("chiri-name") || randomFunnyName());
+    setAvatar(randomLookIndex());
     const params = new URLSearchParams(location.search);
     setJoinCode(params.get("room")?.toUpperCase() ?? "");
     setIsInvited(Boolean(params.get("room")));
@@ -176,8 +175,16 @@ export default function Party() {
         ? { startAt: singAt, durationSeconds: prompt.duration }
         : null;
 
+  // The crowd never wears a character someone is playing.
+  function crowdLooksWithout(playerLooks: number[]): number[] {
+    return crowdLooks.filter((look) => !playerLooks.includes(look));
+  }
+
   const homeScene: StageScene = {
-    actors: HOME_ACTORS.map(actor => actor.id === "home-performer" ? { ...actor, look: avatar, color: AVATAR_COLORS[avatar % AVATAR_COLORS.length] } : actor),
+    actors: [
+      ...crowdActors(["home-left", "home-right"], crowdLooksWithout([avatar])),
+      { id: "home-performer", name: "", look: avatar, isYou: false },
+    ],
     performerId: "home-performer",
     talkingId: micReady ? "home-performer" : "",
     levelSource: "mic",
@@ -198,11 +205,16 @@ export default function Party() {
       ...connectedPlayers.map((player) => ({
         id: player.id,
         name: player.name,
-        color: AVATAR_COLORS[player.avatar % AVATAR_COLORS.length],
         look: player.avatar,
         isYou: player.id === game?.playerId,
       })),
-      ...(isSolo ? SOLO_CROWD : []),
+      // Playing solo, a small crowd watches and cheers, so the stage never feels empty.
+      ...(isSolo
+        ? crowdActors(
+            ["crowd-left", "crowd-right", "crowd-back"],
+            crowdLooksWithout(connectedPlayers.map((player) => player.avatar)),
+          )
+        : []),
     ],
     // While recording, your own character steps up to the mic on your screen during the count-in.
     performerId:
@@ -505,28 +517,57 @@ export default function Party() {
               <div className="entry-form">
                 <div className="identity-fields">
                   <label htmlFor="player-name">What should we call you?</label>
-                  <input
-                    id="player-name"
-                    maxLength={24}
-                    placeholder="Your party name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    autoComplete="nickname"
-                  />
-                  <fieldset className="avatar-picker">
-                    <legend>Pick your face</legend>
-                    {AVATAR_COLORS.map((_, index) => (
-                      <button
-                        key={index}
-                        className={avatar === index ? "selected" : ""}
-                        onClick={() => setAvatar(index)}
-                        aria-label={`Choose face ${index + 1}`}
-                        aria-pressed={avatar === index}
-                      >
-                        <Avatar index={index} />
-                      </button>
-                    ))}
-                  </fieldset>
+                  <div className="name-row">
+                    <input
+                      id="player-name"
+                      maxLength={24}
+                      placeholder="Your party name"
+                      value={name}
+                      onChange={(event) => setName(event.target.value)}
+                      autoComplete="nickname"
+                    />
+                    <button
+                      className="dice-button"
+                      aria-label="Another funny name"
+                      title="Another funny name"
+                      onClick={() => setName(randomFunnyName(name))}
+                    >
+                      🎲
+                    </button>
+                  </div>
+                  <div className="face-picker" role="group" aria-label="Your character">
+                    <Avatar index={avatar} />
+                    <p>
+                      <strong>Your character</strong>
+                      <small>
+                        {avatar + 1} of {CHARACTER_LOOKS.length}
+                      </small>
+                    </p>
+                    <button
+                      className="dice-button"
+                      aria-label="Previous character"
+                      onClick={() =>
+                        setAvatar((avatar + CHARACTER_LOOKS.length - 1) % CHARACTER_LOOKS.length)
+                      }
+                    >
+                      ‹
+                    </button>
+                    <button
+                      className="dice-button"
+                      aria-label="Random character"
+                      title="Random character"
+                      onClick={() => setAvatar(randomLookIndex(avatar))}
+                    >
+                      🎲
+                    </button>
+                    <button
+                      className="dice-button"
+                      aria-label="Next character"
+                      onClick={() => setAvatar((avatar + 1) % CHARACTER_LOOKS.length)}
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
                 <div className="room-actions">
                   <button
@@ -1403,38 +1444,49 @@ function PackPicker({
   );
 }
 
+// A flat drawing of a character's face for lists and menus, matching the 3D character's look.
 function Avatar({ index }: { index: number }) {
   const look = CHARACTER_LOOKS[index % CHARACTER_LOOKS.length];
+  const style = look.hairStyle;
+  const hasHairTop = style !== "bald" && style !== "mohawk" && style !== "scarf";
   return (
     <svg
       className="avatar"
       viewBox="0 0 48 48"
       role="img"
-      aria-label={`Party face ${index + 1}`}
+      aria-label={`Party character ${index + 1}`}
     >
-      <rect
-        x="2"
-        y="2"
-        width="44"
-        height="44"
-        rx={index % 2 ? 15 : 22}
-        fill={AVATAR_COLORS[index % AVATAR_COLORS.length]}
-      />
-      {look.hairStyle === "long" && (
-        <rect x="9" y="14" width="30" height="27" rx="9" fill={look.hair} />
-      )}
+      <rect x="2" y="2" width="44" height="44" rx={index % 2 ? 15 : 22} fill={look.shirt} />
+      {/* Hair that falls behind the face. */}
+      {style === "scarf" && <rect x="7" y="8" width="34" height="40" rx="16" fill={look.hair} />}
+      {style === "long" && <rect x="9" y="14" width="30" height="27" rx="9" fill={look.hair} />}
+      {style === "bob" && <rect x="9" y="13" width="30" height="21" rx="8" fill={look.hair} />}
+      {style === "ponytail" && <ellipse cx="39" cy="24" rx="4" ry="9" fill={look.hair} />}
+      {style === "braid" &&
+        [30, 35, 40].map((y) => <circle key={y} cx="37" cy={y} r="3" fill={look.hair} />)}
+      {style === "pigtails" &&
+        [9, 39].map((x) => <circle key={x} cx={x} cy="22" r="5" fill={look.hair} />)}
       <circle cx="24" cy="27" r="13" fill={look.skin} />
-      <path d="M11 25 Q11 10 24 10 Q37 10 37 25 Q31 17 24 18 Q17 17 11 25Z" fill={look.hair} />
-      {look.hairStyle === "spiky" && (
+      {hasHairTop && (
+        <path d="M11 25 Q11 10 24 10 Q37 10 37 25 Q31 17 24 18 Q17 17 11 25Z" fill={look.hair} />
+      )}
+      {style === "spiky" && (
         <path d="M13 17 L15 7 L19 14 L23 5 L27 13 L32 6 L34 16Z" fill={look.hair} />
       )}
-      {look.hairStyle === "bun" && <circle cx="24" cy="8" r="5" fill={look.hair} />}
-      {look.hairStyle === "curly" &&
+      {style === "bun" && <circle cx="24" cy="8" r="5" fill={look.hair} />}
+      {style === "curly" &&
         [13, 19, 24, 29, 35].map((x) => (
           <circle key={x} cx={x} cy={x === 24 ? 9 : 12} r="5" fill={look.hair} />
         ))}
-      {look.hairStyle === "band" && (
-        <rect x="11" y="17" width="26" height="3.5" rx="1.5" fill="#d9372b" />
+      {style === "band" && <rect x="11" y="17" width="26" height="3.5" rx="1.5" fill="#d9372b" />}
+      {style === "mohawk" && <rect x="21" y="4" width="6" height="13" rx="3" fill={look.hair} />}
+      {style === "bald" &&
+        [12, 36].map((x) => <circle key={x} cx={x} cy="22" r="3" fill={look.hair} />)}
+      {style === "cap" && (
+        <>
+          <path d="M11 20 Q11 7 24 7 Q37 7 37 20Z" fill="#d9372b" />
+          <rect x="22" y="17.5" width="19" height="3.5" rx="1.7" fill="#d9372b" />
+        </>
       )}
       <ellipse cx="19" cy="26" rx="3.2" ry="3.8" fill="#fff" />
       <ellipse cx="29" cy="26" rx="3.2" ry="3.8" fill="#fff" />
@@ -1447,9 +1499,10 @@ function Avatar({ index }: { index: number }) {
           <path d="M23.6 26 h0.8" />
         </g>
       )}
-      {look.moustache && (
-        <rect x="19" y="31.5" width="10" height="2.2" rx="1" fill={look.hair} />
+      {look.beard && (
+        <path d="M13 31 Q24 46 35 31 Q30 37 24 37 Q18 37 13 31Z" fill={look.hair} />
       )}
+      {look.moustache && <rect x="19" y="31.5" width="10" height="2.2" rx="1" fill={look.hair} />}
       <path
         d={index % 3 ? "M19 34.5 Q24 38.5 29 34" : "M19 35.5 Q24 32.5 29 35.5"}
         fill="none"
@@ -1457,6 +1510,14 @@ function Avatar({ index }: { index: number }) {
         strokeWidth="2"
         strokeLinecap="round"
       />
+      {look.earrings && [11, 37].map((x) => <circle key={x} cx={x} cy="31" r="1.6" fill="#e2b33c" />)}
+      {look.bindi && <circle cx="24" cy="21" r="1.2" fill="#c62828" />}
+      {look.flower &&
+        [
+          [14, 14],
+          [17.5, 11.5],
+          [21, 10.5],
+        ].map(([x, y]) => <circle key={x} cx={x} cy={y} r="1.6" fill="#fffbe8" />)}
     </svg>
   );
 }

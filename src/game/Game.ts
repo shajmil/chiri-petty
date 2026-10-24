@@ -19,6 +19,7 @@ import {
   recordingWindowSeconds,
   SCORE_REVEAL_MS,
   unavailableScore,
+  uniqueAvatar,
   UPLOAD_GRACE_MS,
   WALK_TO_MIC_MS,
 } from "./rules";
@@ -175,7 +176,7 @@ export class Game {
         player = createPlayer(
           event.sender,
           event.command.name,
-          event.command.avatar,
+          uniqueAvatar(room, event.command.avatar),
           this.now,
         );
         room.players.push(player);

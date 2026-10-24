@@ -5,8 +5,7 @@ import { CHARACTER_LOOKS, type CharacterLook } from "../game/prompts";
 export interface StageActor {
   id: string;
   name: string;
-  color: string;
-  /** Index into CHARACTER_LOOKS, the same as the player's avatar choice. */
+  /** Index into CHARACTER_LOOKS, the same as the player's avatar number. */
   look: number;
   isYou: boolean;
 }
@@ -82,10 +81,16 @@ function material(color: string): THREE.MeshStandardMaterial {
   return new THREE.MeshStandardMaterial({ color, roughness: 0.75 });
 }
 
+const GOLD = "#e2b33c";
+
 function addHair(body: THREE.Group, look: CharacterLook, hair: THREE.Material): void {
-  const cap = sphere(body, 0.7, [0, 3.2, -0.07], hair);
-  cap.scale.y = look.hairStyle === "band" ? 0.38 : 0.45;
-  if (look.hairStyle === "spiky") {
+  const style = look.hairStyle;
+  // A bald head, a mohawk and a headscarf have no rounded cap of hair on top.
+  if (style !== "bald" && style !== "mohawk" && style !== "scarf") {
+    const cap = sphere(body, 0.7, [0, 3.2, -0.07], hair);
+    cap.scale.y = style === "band" || style === "cap" ? 0.38 : 0.45;
+  }
+  if (style === "spiky") {
     for (let index = 0; index < 5; index++) {
       const angle = -0.9 + index * 0.45;
       const spike = new THREE.Mesh(new THREE.ConeGeometry(0.15, 0.42, 8), hair);
@@ -94,29 +99,66 @@ function addHair(body: THREE.Group, look: CharacterLook, hair: THREE.Material): 
       body.add(spike);
     }
   }
-  if (look.hairStyle === "long") {
+  if (style === "long") {
     box(body, [1.2, 1.15, 0.26], [0, 2.6, -0.45], hair, 0.12);
     for (const side of [-1, 1]) box(body, [0.2, 0.95, 0.55], [side * 0.64, 2.62, -0.12], hair, 0.08);
   }
-  if (look.hairStyle === "bun") sphere(body, 0.28, [0, 3.58, -0.22], hair);
-  if (look.hairStyle === "curly") {
+  if (style === "bun") sphere(body, 0.28, [0, 3.58, -0.22], hair);
+  if (style === "curly") {
     for (let index = 0; index < 9; index++) {
       const angle = (index / 9) * Math.PI * 2;
       sphere(body, 0.27, [Math.cos(angle) * 0.5, 3.28 + (index % 2) * 0.12, Math.sin(angle) * 0.42 - 0.08], hair);
     }
     sphere(body, 0.32, [0, 3.48, -0.05], hair);
   }
-  if (look.hairStyle === "band") {
+  if (style === "band") {
     const band = new THREE.Mesh(new THREE.TorusGeometry(0.66, 0.07, 8, 40), material("#d9372b"));
     band.rotation.x = Math.PI / 2 - 0.12;
     band.position.set(0, 3.12, 0);
     body.add(band);
+  }
+  // A ponytail tied at the side, so it shows from the front.
+  if (style === "ponytail") {
+    sphere(body, 0.17, [0.45, 3.12, -0.45], hair);
+    const tail = box(body, [0.24, 0.8, 0.26], [0.68, 2.62, -0.22], hair, 0.11);
+    tail.rotation.z = 0.25;
+  }
+  // A long plait brought forward over one shoulder.
+  if (style === "braid")
+    for (const [side, height, depth] of [[0.5, 2.9, -0.45], [0.62, 2.62, -0.25], [0.6, 2.38, 0], [0.5, 2.15, 0.25], [0.45, 1.9, 0.33], [0.43, 1.66, 0.35]])
+      sphere(body, 0.14, [side, height, depth], hair);
+  if (style === "pigtails")
+    for (const side of [-1, 1]) {
+      sphere(body, 0.24, [side * 0.72, 3.05, -0.15], hair);
+      sphere(body, 0.18, [side * 0.8, 2.75, -0.15], hair);
+    }
+  if (style === "bob") {
+    box(body, [1.3, 0.75, 0.3], [0, 2.8, -0.45], hair, 0.14);
+    for (const side of [-1, 1]) box(body, [0.22, 0.62, 0.6], [side * 0.66, 2.8, -0.1], hair, 0.1);
+  }
+  if (style === "mohawk")
+    [0.3, 0.08, -0.14, -0.36].forEach((depth, index) =>
+      box(body, [0.16, 0.42 - index * 0.04, 0.2], [0, 3.55 - index * 0.03, depth], hair, 0.06),
+    );
+  if (style === "bald") for (const side of [-1, 1]) sphere(body, 0.2, [side * 0.6, 3.0, -0.25], hair);
+  if (style === "cap") {
+    const red = material("#d9372b");
+    const crown = sphere(body, 0.72, [0, 3.24, -0.05], red);
+    crown.scale.y = 0.5;
+    box(body, [0.85, 0.06, 0.55], [0, 3.16, 0.62], red, 0.03);
+  }
+  // A headscarf frames the face and drapes over the shoulders.
+  if (style === "scarf") {
+    const hood = sphere(body, 0.8, [0, 2.95, -0.16], hair);
+    hood.scale.set(1, 1.05, 0.95);
+    box(body, [1.1, 0.4, 0.72], [0, 2.18, -0.02], hair, 0.18);
   }
 }
 
 function addOutfit(
   body: THREE.Group,
   look: CharacterLook,
+  shirt: THREE.Material,
   pants: THREE.Material,
   cream: THREE.Material,
 ): void {
@@ -128,6 +170,55 @@ function addOutfit(
     for (const height of [1.42, 1.86]) box(body, [1.03, 0.11, 0.63], [0, height, 0], cream, 0.04);
   if (look.outfit === "straps")
     for (const side of [-1, 1]) box(body, [0.15, 1.22, 0.64], [side * 0.27, 1.65, 0], pants, 0.04);
+  // A saree: pleats down to the feet with a gold border, and the pallu across the blouse.
+  if (look.outfit === "saree") {
+    body.add(cylinder(0.5, 0.62, 1.0, 0.6, pants));
+    body.add(cylinder(0.63, 0.63, 0.08, 0.14, material(GOLD)));
+    const pallu = box(body, [0.32, 1.35, 0.07], [0.02, 1.68, 0.33], pants, 0.03);
+    pallu.rotation.z = -0.62;
+  }
+  // A long kurta reaching over the hips, with a neckline placket.
+  if (look.outfit === "kurta") {
+    box(body, [1.04, 0.6, 0.64], [0, 1.05, 0], shirt, 0.2);
+    box(body, [0.1, 0.55, 0.06], [0, 1.92, 0.32], cream);
+  }
+  if (look.outfit === "dress") body.add(cylinder(0.5, 0.8, 0.62, 0.86, shirt));
+  if (look.outfit === "jacket")
+    for (const side of [-1, 1]) box(body, [0.36, 1.18, 0.08], [side * 0.3, 1.66, 0.31], pants, 0.04);
+  if (look.outfit === "tie") {
+    const tie = material("#c0392b");
+    box(body, [0.18, 0.12, 0.06], [0, 2.17, 0.33], tie, 0.03);
+    box(body, [0.15, 0.7, 0.05], [0, 1.78, 0.33], tie, 0.03);
+  }
+}
+
+function cylinder(
+  topRadius: number,
+  bottomRadius: number,
+  height: number,
+  centerHeight: number,
+  surface: THREE.Material,
+): THREE.Mesh {
+  const mesh = new THREE.Mesh(new THREE.CylinderGeometry(topRadius, bottomRadius, height, 24), surface);
+  mesh.position.y = centerHeight;
+  mesh.castShadow = true;
+  return mesh;
+}
+
+function addAccessories(body: THREE.Group, look: CharacterLook, hair: THREE.Material): void {
+  if (look.beard) box(body, [0.8, 0.4, 0.4], [0, 2.33, 0.4], hair, 0.16);
+  if (look.moustache) box(body, [0.42, 0.09, 0.08], [0, 2.67, 0.66], hair, 0.04);
+  if (look.earrings)
+    for (const side of [-1, 1]) sphere(body, 0.07, [side * 0.67, 2.68, 0.05], material(GOLD));
+  if (look.bindi) sphere(body, 0.045, [0, 3.1, 0.635], material("#c62828"));
+  // Jasmine flowers around the back of the head, curving round to both sides.
+  if (look.flower) {
+    const jasmine = material("#fffbe8");
+    for (let index = 0; index < 8; index++) {
+      const angle = Math.PI * 0.5 + (index / 7) * Math.PI;
+      sphere(body, 0.07, [Math.sin(angle) * 0.68, 3.12, Math.cos(angle) * 0.68 - 0.1], jasmine);
+    }
+  }
 }
 
 export function buildCharacter(
@@ -135,7 +226,7 @@ export function buildCharacter(
   materials: SharedMaterials,
 ): Character {
   const look = CHARACTER_LOOKS[actor.look % CHARACTER_LOOKS.length];
-  const shirt = material(actor.color);
+  const shirt = material(look.shirt);
   const skin = material(look.skin);
   const hair = material(look.hair);
   const pants = material(look.pants);
@@ -146,13 +237,13 @@ export function buildCharacter(
   root.add(body);
 
   box(body, [1, 1.2, 0.6], [0, 1.65, 0], shirt, 0.25);
-  addOutfit(body, look, pants, materials.cream);
+  addOutfit(body, look, shirt, pants, materials.cream);
   sphere(body, HEAD_RADIUS, [0, HEAD_HEIGHT, 0], skin);
   addHair(body, look, hair);
   sphere(body, 0.1, [0, 2.78, 0.72], skin);
   const mouth = sphere(body, 0.2, [0, 2.55, 0.61], materials.ink);
   mouth.scale.set(1, 0.3, 0.3);
-  if (look.moustache) box(body, [0.42, 0.09, 0.08], [0, 2.67, 0.66], hair, 0.04);
+  addAccessories(body, look, hair);
 
   const legs: THREE.Group[] = [];
   const arms: THREE.Group[] = [];
