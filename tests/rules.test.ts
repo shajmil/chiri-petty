@@ -13,6 +13,7 @@ import {
   LAUGH_EMOTE,
   STAGE_EVENT_LIMIT,
   unavailableScore,
+  voiceChatVolume,
 } from "../src/game/rules";
 import type { Submission } from "../src/game/types";
 import { createDeck, findPrompt } from "../src/game/prompts";
@@ -204,6 +205,15 @@ test("a dodged tomato misses and does not count", () => {
   assert.equal(addStageEvent(room, "friend", "tomato", "", "hit", 2000, () => 0), true);
   assert.equal(room.stageEvents.at(-1)?.dodged, false);
   assert.equal(take.tomatoes, 1);
+});
+
+test("voice chat fades under performances and goes silent while everyone records", () => {
+  assert.equal(voiceChatVolume("LOBBY", false), 1);
+  assert.equal(voiceChatVolume("LISTENING", false), 0.25);
+  assert.equal(voiceChatVolume("RECORDING", false), 0);
+  assert.equal(voiceChatVolume("PLAYBACK", true), 0.25);
+  assert.equal(voiceChatVolume("PLAYBACK", false), 1);
+  assert.equal(voiceChatVolume("SCORING", false), 1);
 });
 
 test("a tomato needs someone else to hit", () => {

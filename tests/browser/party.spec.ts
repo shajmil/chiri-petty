@@ -350,6 +350,42 @@ test("ready-up asks about the mic once; the optional mic test catches a silent m
   await expect(page.getByRole("button", { name: "Ready · Change my mind" })).toBeVisible();
 });
 
+test("players talk on live voice chat, can turn each other down and mute their own mic", async ({
+  page,
+  context,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const code = await createTabRoom(page, "Anu");
+  const friend = await context.newPage();
+  friend.on("pageerror", (error) => errors.push(error.message));
+  await joinTabRoom(friend, code, "Manu");
+  await readyUp(page);
+  await readyUp(friend);
+
+  // The fake microphone keeps talking, so each player sees the other speaking once the link is up.
+  const manuOnAnusScreen = page.locator(".player-list li", { hasText: /^Manu/ });
+  await expect(manuOnAnusScreen).toHaveClass(/speaking/, { timeout: 20000 });
+  await expect(friend.locator(".player-list li", { hasText: /^Anu/ })).toHaveClass(/speaking/, {
+    timeout: 20000,
+  });
+
+  await page.getByRole("button", { name: "Voice chat volumes" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Manu");
+  await expect(page.getByRole("dialog")).not.toContainText("Connecting");
+  await page.getByRole("button", { name: "Mute Manu" }).click();
+  await expect(page.getByRole("dialog")).toContainText("Muted for you");
+  await page.getByRole("button", { name: "Unmute Manu" }).click();
+  await page.getByRole("button", { name: "Close dialog" }).click();
+
+  await friend.getByRole("button", { name: "Mute my mic" }).click();
+  await expect(friend.getByRole("button", { name: "Unmute my mic" })).toBeVisible();
+  await expect(manuOnAnusScreen).not.toHaveClass(/speaking/, { timeout: 10000 });
+  await page.waitForTimeout(1500);
+  await expect(manuOnAnusScreen).not.toHaveClass(/speaking/);
+  expect(errors).toEqual([]);
+});
+
 test("an invitation link puts joining first, with no scrolling on a phone", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openParty(page, "/?mode=tabs&room=ABCDEFGH");

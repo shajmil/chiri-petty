@@ -25,6 +25,8 @@ export interface StageScene {
   finishedId: string;
   /** The round winner, who celebrates at the mic while the scores show. */
   celebrationId: string;
+  /** How loud each player is talking on voice chat, so their character's mouth moves. */
+  voiceLevel: (playerId: string) => number;
   /** The home page has its own big title, so it hides the graffiti logo on the wall. */
   showWallLogo: boolean;
 }
@@ -79,6 +81,7 @@ export default function StageView({
       stage.current.performanceKey = current.performanceKey;
       stage.current.finishedId = current.finishedId;
       stage.current.celebrationId = current.celebrationId;
+      stage.current.voiceLevel = current.voiceLevel;
       stage.current.talkingId = current.talkingId;
       stage.current.chorus = current.chorus;
       stage.current.reducedMotion = latestReducedMotion.current;
@@ -123,6 +126,21 @@ export function MicIcon() {
     >
       <rect x="8" y="2" width="8" height="13" rx="4" />
       <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8" />
+    </svg>
+  );
+}
+
+export function MicOffIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      aria-hidden="true"
+    >
+      <rect x="8" y="2" width="8" height="13" rx="4" />
+      <path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3M8 22h8M3 3l18 18" />
     </svg>
   );
 }

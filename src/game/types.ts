@@ -150,6 +150,17 @@ export interface RoomEvent {
   state?: RoomState;
 }
 
+/** A message that sets up the live voice link between two players. */
+export interface VoiceSignal {
+  from: string;
+  /** Empty means everyone in the room. */
+  to: string;
+  kind: "hello" | "here" | "offer" | "answer" | "bye";
+  /** Pairs an answer with its offer, so a late answer from an older attempt is ignored. */
+  linkId: string;
+  description?: RTCSessionDescriptionInit;
+}
+
 export interface RealtimeProvider {
   readonly kind: "online" | "tabs";
   readonly playerId: string;
@@ -160,6 +171,8 @@ export interface RealtimeProvider {
     connection: (connected: boolean) => void,
   ): Promise<void>;
   send(event: RoomEvent): Promise<void>;
+  sendVoice(signal: VoiceSignal): Promise<void>;
+  onVoice(listener: (signal: VoiceSignal) => void): void;
   save(state: RoomState): Promise<void>;
   recover(state: RoomState): Promise<boolean>;
   upload(path: string, blob: Blob): Promise<void>;

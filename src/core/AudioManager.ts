@@ -58,6 +58,20 @@ export class AudioManager {
     this.microphoneSource.connect(this.analyser);
   }
 
+  public microphoneTrack(): MediaStreamTrack | null {
+    return this.stream?.getAudioTracks()[0] ?? null;
+  }
+
+  /** Measures how loud a live stream is, for speaking indicators. Call stop() when the stream goes away. */
+  public watchStreamLevel(stream: MediaStream): { read: () => number; stop: () => void } {
+    if (!this.context) return { read: () => 0, stop: () => {} };
+    const analyser = this.context.createAnalyser();
+    analyser.fftSize = 256;
+    const source = this.context.createMediaStreamSource(stream);
+    source.connect(analyser);
+    return { read: () => this.measureLevel(analyser), stop: () => source.disconnect() };
+  }
+
   public readLevel(): number {
     this.level = this.measureLevel(this.analyser);
     return this.level;

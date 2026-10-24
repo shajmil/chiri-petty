@@ -3,7 +3,7 @@ import {
   type RealtimeChannel,
   type SupabaseClient,
 } from "@supabase/supabase-js";
-import type { RealtimeProvider, RoomEvent, RoomState } from "../game/types";
+import type { RealtimeProvider, RoomEvent, RoomState, VoiceSignal } from "../game/types";
 import { createPlayer, createRoom } from "../game/rules";
 
 const supabasePublicKey =
@@ -22,6 +22,7 @@ export class SupabaseProvider implements RealtimeProvider {
   private readonly client: SupabaseClient;
   private channel: RealtimeChannel | null = null;
   private code = "";
+  private voiceListener: ((signal: VoiceSignal) => void) | null = null;
 
   public constructor() {
     if (!onlineConfigured)
@@ -102,6 +103,10 @@ export class SupabaseProvider implements RealtimeProvider {
     this.channel.on("broadcast", { event: "party" }, ({ payload }) =>
       listener(payload as RoomEvent),
     );
+    // Listeners must be added before subscribing, so voice messages are forwarded to whoever listens later.
+    this.channel.on("broadcast", { event: "voice" }, ({ payload }) =>
+      this.voiceListener?.(payload as VoiceSignal),
+    );
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(
         () =>
@@ -137,6 +142,14 @@ export class SupabaseProvider implements RealtimeProvider {
     });
     if (status !== "ok")
       throw new Error("Room message could not be delivered. Reconnecting…");
+  }
+
+  public async sendVoice(signal: VoiceSignal): Promise<void> {
+    await this.channel?.send({ type: "broadcast", event: "voice", payload: signal });
+  }
+
+  public onVoice(listener: (signal: VoiceSignal) => void): void {
+    this.voiceListener = listener;
   }
 
   public async save(state: RoomState): Promise<void> {

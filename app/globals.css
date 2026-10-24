@@ -1978,6 +1978,80 @@ input[type="checkbox"] {
 .dialog:has(.ready-check) {
   width: min(440px, calc(100vw - 24px));
 }
+
+/* Voice chat: mic and volume buttons beside the room code, a ring around whoever is talking. */
+.voice-button {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--raised);
+  color: var(--muted);
+}
+.voice-button.on {
+  background: var(--accent);
+  color: var(--ground);
+}
+.voice-button svg {
+  width: 19px;
+  height: 19px;
+}
+.player-list li.speaking .avatar {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 50%;
+}
+.dialog:has(.voice-mixer) {
+  width: min(460px, calc(100vw - 24px));
+}
+.voice-mixer > button {
+  width: 100%;
+}
+.voice-mixer > button svg {
+  width: 18px;
+  height: 18px;
+}
+.voice-mixer ul {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0;
+  padding: 0;
+  list-style: none;
+}
+.voice-mixer li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--raised);
+}
+.voice-mixer li.speaking {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.voice-mixer li small {
+  display: block;
+  color: var(--muted);
+}
+.voice-mixer li input[type="range"] {
+  grid-column: 1 / -1;
+  width: 100%;
+}
+.voice-mute {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--control);
+  font-size: 17px;
+}
+.voice-note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
 .ready-check p {
   margin: 0 0 18px;
   color: var(--muted);

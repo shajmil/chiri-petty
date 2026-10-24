@@ -1,4 +1,4 @@
-import type { RealtimeProvider, RoomEvent, RoomState } from "../game/types";
+import type { RealtimeProvider, RoomEvent, RoomState, VoiceSignal } from "../game/types";
 import { createPlayer, createRoom } from "../game/rules";
 
 function audioDatabase(): Promise<IDBDatabase> {
@@ -17,6 +17,7 @@ export class TabProvider implements RealtimeProvider {
   public clockOffset = 0;
   private code = "";
   private channel: BroadcastChannel | null = null;
+  private voiceChannel: BroadcastChannel | null = null;
 
   public async open(
     code: string | null,
@@ -61,6 +62,15 @@ export class TabProvider implements RealtimeProvider {
 
   public async send(event: RoomEvent): Promise<void> {
     this.channel?.postMessage(event);
+  }
+
+  public async sendVoice(signal: VoiceSignal): Promise<void> {
+    this.voiceChannel?.postMessage(signal);
+  }
+
+  public onVoice(listener: (signal: VoiceSignal) => void): void {
+    this.voiceChannel ??= new BroadcastChannel(`chiri-voice-${this.code}`);
+    this.voiceChannel.onmessage = (event) => listener(event.data as VoiceSignal);
   }
 
   public async save(state: RoomState): Promise<void> {
@@ -110,5 +120,6 @@ export class TabProvider implements RealtimeProvider {
 
   public async close(): Promise<void> {
     this.channel?.close();
+    this.voiceChannel?.close();
   }
 }

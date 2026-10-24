@@ -34,6 +34,20 @@ Never put a service-role key in a `NEXT_PUBLIC_` variable or send it to the brow
 
 No Supabase credentials are included. Live cross-device behavior and the SQL policies must be tested against your configured project before describing this as a verified online release.
 
+## Voice chat
+
+Players in a room talk to each other live. Each browser opens a direct WebRTC audio link to every other player, set up through the same private `party:CODE` channel, so no extra migration is needed. Voices drop to a quarter volume while the reference or a performance plays, and every chat mic closes while everyone records, so no voices end up in the takes. Each player can mute their own mic and turn anyone else's voice down; that only changes what they hear, never a performance.
+
+Direct links use Google's public STUN server. Some networks (strict office Wi‑Fi, some mobile carriers) also need a TURN relay. To add one, set these optional variables and rebuild:
+
+```dotenv
+NEXT_PUBLIC_TURN_URL=turn:your-turn-server.example.com:3478
+NEXT_PUBLIC_TURN_USERNAME=your-username
+NEXT_PUBLIC_TURN_CREDENTIAL=your-credential
+```
+
+Like every `NEXT_PUBLIC_` value, these are visible in the browser, so use credentials meant for public clients. Players' IP addresses are visible to each other through the direct links, as with any peer-to-peer voice chat. Voice chat works best with headphones.
+
 ## Recording retention
 
 Rooms expire after **24 hours**, after which SQL policies deny access to their recordings. This is separate from physically deleting the files.

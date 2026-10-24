@@ -196,6 +196,16 @@ export function awardRound(room: RoomState): void {
   });
 }
 
+/**
+ * How loud live voice chat plays: quieter under the reference and each performance,
+ * and silent while everyone records so voices never end up in someone's take.
+ */
+export function voiceChatVolume(phase: RoomState["phase"], isTakePlaying: boolean): number {
+  if (phase === "RECORDING") return 0;
+  if (phase === "LISTENING" || isTakePlaying) return 0.25;
+  return 1;
+}
+
 export function recordingWindowSeconds(referenceSeconds: number): number {
   return Math.round((referenceSeconds + RECORDING_SLACK_SECONDS) * 10) / 10;
 }

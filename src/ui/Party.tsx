@@ -18,6 +18,7 @@ import {
   DEFAULT_ROUNDS,
   recordingWindowSeconds,
   ROUND_CHOICES,
+  voiceChatVolume,
 } from "../game/rules";
 import type { AudioScore, Category, Player, RoomState } from "../game/types";
 import type { StageActor } from "../world/Character";
@@ -26,7 +27,9 @@ import {
   SupabaseProvider,
 } from "../network/SupabaseProvider";
 import { TabProvider } from "../network/TabProvider";
-import StageView, { MicIcon, type StageScene } from "./StageView";
+import { VoiceChat } from "../network/VoiceChat";
+import StageView, { MicIcon, MicOffIcon, type StageScene } from "./StageView";
+import VoiceMixer, { SpeakerIcon } from "./VoiceMixer";
 import CustomClips from "./CustomClips";
 import ReactionBar from "./ReactionBar";
 import LyricsTrack from "./LyricsTrack";
@@ -44,12 +47,20 @@ type Dialog =
   | "setup"
   | "ready-check"
   | "mic-check"
+  | "voices"
   | null;
+
+// A player counts as speaking above this voice level.
+const SPEAKING_LEVEL = 0.08;
 
 export default function Party() {
   const [audio] = useState(() => new AudioManager());
   const [game, setGame] = useState<Game | null>(null);
   const gameRef = useRef<Game | null>(null);
+  const [voiceChat, setVoiceChat] = useState<VoiceChat | null>(null);
+  const voiceChatRef = useRef<VoiceChat | null>(null);
+  const [isChatMicOn, setIsChatMicOn] = useState(true);
+  const [voiceVolumes, setVoiceVolumes] = useState<Record<string, number>>({});
   const [, render] = useReducer((count) => count + 1, 0);
   const [name, setName] = useState("");
   const [avatar, setAvatar] = useState(0);
@@ -78,6 +89,7 @@ export default function Party() {
     if (params.get("mode") === "tabs") setMode("tabs");
     setReducedMotion(matchMedia("(prefers-reduced-motion: reduce)").matches);
     return () => {
+      voiceChatRef.current?.close();
       void gameRef.current?.close();
       audio.dispose();
     };
@@ -118,6 +130,27 @@ export default function Party() {
       currentTake &&
       now >= room.playbackStartAt + currentTake.duration * 1000,
   );
+  const isTakePlaying = isPerforming && !isScoreRevealed;
+  const chatRoundVolume = room ? voiceChatVolume(room.phase, isTakePlaying) : 1;
+  const isChatMicSwitchedOn = micReady && isChatMicOn;
+  // Everyone's chat mic closes while they record, so no voices end up in the takes.
+  const isChatMicOpen = isChatMicSwitchedOn && room?.phase !== "RECORDING";
+  const roomPlayerIds = room?.players.map((player) => player.id).join(",") ?? "";
+
+  useEffect(() => {
+    voiceChat?.setRoundVolume(chatRoundVolume);
+  }, [voiceChat, chatRoundVolume]);
+  useEffect(() => {
+    voiceChat?.setMicrophoneOpen(isChatMicOpen);
+  }, [voiceChat, isChatMicOpen]);
+  useEffect(() => {
+    voiceChat?.keepOnly(roomPlayerIds.split(","));
+  }, [voiceChat, roomPlayerIds]);
+
+  function chatLevel(playerId: string): number {
+    if (playerId === game?.playerId) return isChatMicOpen ? micLevel : 0;
+    return voiceChat?.level(playerId) ?? 0;
+  }
   const currentPack = PACKS.find((pack) => pack.id === prompt?.category);
   const isCountingIn = room?.phase === "RECORDING" && countdown > 0;
   const recordElapsed = room ? (now - room.recordAt) / 1000 : 0;
@@ -144,6 +177,7 @@ export default function Party() {
     performanceKey: "",
     finishedId: "",
     celebrationId: "",
+    voiceLevel: () => 0,
     showWallLogo: false,
   };
   const roomScene: StageScene = {
@@ -169,7 +203,7 @@ export default function Party() {
         ? isPerforming && !isScoreRevealed
           ? (currentTake?.playerId ?? "")
           : ""
-        : isRecordingLive || (room?.phase === "LOBBY" && micReady)
+        : isRecordingLive
           ? (game?.playerId ?? "")
           : "",
     levelSource: room?.phase === "PLAYBACK" ? "playback" : "mic",
@@ -189,6 +223,7 @@ export default function Party() {
           : "",
     finishedId: isScoreRevealed ? (currentTake?.playerId ?? "") : "",
     celebrationId: room?.phase === "SCORING" ? roundWinnerId(room) : "",
+    voiceLevel: chatLevel,
   };
 
   async function connect(join: boolean) {
@@ -217,6 +252,11 @@ export default function Party() {
       await nextGame.open(join ? joinCode.trim() : null, name.trim(), avatar);
       gameRef.current = nextGame;
       setGame(nextGame);
+      const nextVoiceChat = new VoiceChat(nextGame.provider, audio);
+      nextVoiceChat.useMicrophone(audio.microphoneTrack());
+      nextVoiceChat.start();
+      voiceChatRef.current = nextVoiceChat;
+      setVoiceChat(nextVoiceChat);
       if (selectedPack !== "mixed" && !join)
         await nextGame.command({
           type: "settings",
@@ -237,6 +277,7 @@ export default function Party() {
     try {
       setError("");
       await audio.enableMicrophone(deviceId || undefined);
+      voiceChatRef.current?.useMicrophone(audio.microphoneTrack());
       setMicReady(true);
       setDevices(
         (await navigator.mediaDevices.enumerateDevices()).filter(
@@ -285,7 +326,23 @@ export default function Party() {
     await game?.command({ type: "ready", ready: true });
   }
 
+  async function toggleChatMic() {
+    if (!micReady) {
+      if (await enableMic()) setIsChatMicOn(true);
+      return;
+    }
+    setIsChatMicOn(!isChatMicOn);
+  }
+
+  function changeVoiceVolume(playerId: string, volume: number) {
+    setVoiceVolumes((current) => ({ ...current, [playerId]: volume }));
+    voiceChat?.setPlayerVolume(playerId, volume);
+  }
+
   async function leave() {
+    voiceChat?.close();
+    voiceChatRef.current = null;
+    setVoiceChat(null);
     await game?.close();
     gameRef.current = null;
     setGame(null);
@@ -537,6 +594,23 @@ export default function Party() {
                   {room.code} <CopyIcon />
                 </button>
                 <button
+                  className={`voice-button ${isChatMicSwitchedOn ? "on" : ""}`}
+                  aria-pressed={isChatMicSwitchedOn}
+                  aria-label={isChatMicSwitchedOn ? "Mute my mic" : "Unmute my mic"}
+                  title={isChatMicSwitchedOn ? "Voice chat: your mic is on" : "Voice chat: your mic is muted"}
+                  onClick={() => void toggleChatMic()}
+                >
+                  {isChatMicSwitchedOn ? <MicIcon /> : <MicOffIcon />}
+                </button>
+                <button
+                  className="voice-button"
+                  aria-label="Voice chat volumes"
+                  title="Voice chat volumes"
+                  onClick={() => setDialog("voices")}
+                >
+                  <SpeakerIcon />
+                </button>
+                <button
                   className="secondary compact"
                   onClick={() => void leave()}
                 >
@@ -567,7 +641,9 @@ export default function Party() {
                   {room.players.map((player) => (
                     <li
                       key={player.id}
-                      className={!player.connected ? "disconnected" : ""}
+                      className={`${!player.connected ? "disconnected" : ""} ${
+                        chatLevel(player.id) > SPEAKING_LEVEL ? "speaking" : ""
+                      }`}
                     >
                       <Avatar index={player.avatar} />
                       <div>
@@ -996,10 +1072,24 @@ export default function Party() {
                     ? "Mic check"
                     : dialog === "ready-check"
                       ? "Ready?"
-                      : "Make yourself heard."
+                      : dialog === "voices"
+                        ? "Voice chat"
+                        : "Make yourself heard."
           }
           close={closeDialog}
         >
+          {dialog === "voices" && room && game && (
+            <VoiceMixer
+              players={room.players}
+              myId={game.playerId}
+              volumes={voiceVolumes}
+              isMicOn={isChatMicSwitchedOn}
+              isSpeaking={(playerId) => chatLevel(playerId) > SPEAKING_LEVEL}
+              isLinked={(playerId) => voiceChat?.isConnected(playerId) ?? false}
+              onToggleMic={() => void toggleChatMic()}
+              onVolumeChange={changeVoiceVolume}
+            />
+          )}
           {dialog === "ready-check" && (
             <div className="ready-check">
               <p>Is your mic working? Everyone records at the same time each round.</p>
@@ -1210,6 +1300,7 @@ export default function Party() {
                       setDeviceId(event.target.value);
                       void audio
                         .enableMicrophone(event.target.value)
+                        .then(() => voiceChat?.useMicrophone(audio.microphoneTrack()))
                         .catch((failure) => setError(failure.message));
                     }}
                   >

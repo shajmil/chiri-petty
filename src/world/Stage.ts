@@ -189,6 +189,8 @@ export class Stage {
   /** The round winner, who dances at the mic while the scores show. */
   public celebrationId = "";
   private crownedId = "";
+  /** How loud each player is talking on voice chat right now. */
+  public voiceLevel: (playerId: string) => number = () => 0;
   private crowdMood: CrowdMood = "calm";
   private crowdMoodKey = "";
   private moodStartedAt = 0;
@@ -572,11 +574,14 @@ export class Stage {
     const isAtMic = isPerformer && distance < 0.2;
     if (isAtMic) this.arriveAtMic(character);
     const isTalking = id === this.talkingId && distance < 0.2;
+    const chatLevel = this.voiceLevel(id);
     const mouth = isTalking
       ? 0.3 + this.level * 2 + Math.abs(Math.sin(this.time * 8)) * this.level
-      : this.chorus
-        ? 0.3 + Math.abs(Math.sin(this.time * 7 + index)) * 0.5
-        : 0.3;
+      : chatLevel > 0.05
+        ? 0.3 + chatLevel * 2 + Math.abs(Math.sin(this.time * 8 + index)) * chatLevel
+        : this.chorus
+          ? 0.3 + Math.abs(Math.sin(this.time * 7 + index)) * 0.5
+          : 0.3;
     const pose = this.choosePose(character, index, {
       isPerformer,
       isAtMic,
